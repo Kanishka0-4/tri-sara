@@ -38,7 +38,7 @@ function ScanLine() {
 
 const TAGS = ["Adaptive AI", "Personalized", "No filler", "Built different"];
 
-function LeftPanel() {
+function LeftPanel({isMobile}) {
   return (
     <div
       style={{
@@ -466,7 +466,7 @@ useEffect(() => {
 flexDirection: isMobile ? "column" : "row", overflow:"hidden" }}>
           <Grid />
           <div aria-hidden style={{ position:"absolute", top:0, left:"50%", transform:"translateX(-50%)", width:240, height:2, background:`linear-gradient(90deg, transparent, ${C.violet}, ${C.cyan}, transparent)`, opacity:0.7 }} />
-          <LeftPanel />
+          <LeftPanel isMobile={isMobile} />
           <RightPanel type={type} isMobile={isMobile} />
         </motion.div>
 
