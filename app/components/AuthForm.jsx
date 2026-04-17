@@ -279,7 +279,7 @@ function InputField({ label, ...props }) {
   );
 }
 
-function RightPanel({ type }) {
+function RightPanel({ type, isMobile }) {
   const [tab, setTab] = useState(type === "login" ? "login" : "signup");
   const isLogin = tab === "login";
   const router = useRouter();
@@ -394,7 +394,8 @@ function RightPanel({ type }) {
 
           <AnimatePresence>
             {error && (
-              <motion.div initial={{ opacity:0, y:-4 }} animate={{ opacity:1, y:0 }} exit={{ opacity:0 }} style={{ display:"flex", alignItems:"flex-start", gap:8, background:"rgba(251,113,133,0.08)", border:"1px solid rgba(251,113,133,0.25)", borderRadius:8, padding:"8px 10px", fontSize:12, color:"#fb7185", marginTop:"0.5rem" }}>
+              <motion.div initial={{ opacity:0, y:-4 }} animate={{ opacity:1, y:0 }} exit={{ opacity:0 }} style={{ display: "flex",
+                flexDirection: isMobile ? "column" : "row", alignItems:"flex-start", gap:8, background:"rgba(251,113,133,0.08)", border:"1px solid rgba(251,113,133,0.25)", borderRadius:8, padding:"8px 10px", fontSize:12, color:"#fb7185", marginTop:"0.5rem" }}>
                 <svg width="13" height="13" viewBox="0 0 14 14" fill="none" style={{ flexShrink:0, marginTop:1 }}>
                   <circle cx="7" cy="7" r="6.5" stroke="#fb7185" />
                   <path d="M7 4v3.5M7 9.5v.5" stroke="#fb7185" strokeWidth="1.2" strokeLinecap="round" />
@@ -416,6 +417,14 @@ function RightPanel({ type }) {
 export default function AuthForm({ type }) {
   const [theme, setTheme] = useState("dark");
 
+  const [isMobile, setIsMobile] = useState(false);
+
+useEffect(() => {
+  const check = () => setIsMobile(window.innerWidth < 768);
+  check();
+  window.addEventListener("resize", check);
+  return () => window.removeEventListener("resize", check);
+}, []);
   useEffect(() => {
     const saved = localStorage.getItem("trisara-theme");
     if (saved) {
@@ -449,11 +458,12 @@ export default function AuthForm({ type }) {
         </button>
         <Orbs />
         <ScanLine />
-        <motion.div initial={{ opacity:0, scale:0.97, y:12 }} animate={{ opacity:1, scale:1, y:0 }} transition={{ duration:0.5, ease:[0.22,1,0.36,1] }} style={{ position:"relative", width:"100%", maxWidth:1500, minHeight:560, borderRadius:28, backdropFilter:"blur(24px)", WebkitBackdropFilter:"blur(24px)", background:"rgba(255,255,255,0.03)", border:`1px solid ${C.border}`, boxShadow:`0 24px 80px rgba(0,0,0,0.6), 0 0 60px rgba(167,139,250,0.07)`, display:"flex", overflow:"hidden" }}>
+        <motion.div initial={{ opacity:0, scale:0.97, y:12 }} animate={{ opacity:1, scale:1, y:0 }} transition={{ duration:0.5, ease:[0.22,1,0.36,1] }} style={{ position:"relative", width:"100%", maxWidth:1500, minHeight:560, borderRadius:28, backdropFilter:"blur(24px)", WebkitBackdropFilter:"blur(24px)", background:"rgba(255,255,255,0.03)", border:`1px solid ${C.border}`, boxShadow:`0 24px 80px rgba(0,0,0,0.6), 0 0 60px rgba(167,139,250,0.07)`, display: "flex",
+flexDirection: isMobile ? "column" : "row", overflow:"hidden" }}>
           <Grid />
           <div aria-hidden style={{ position:"absolute", top:0, left:"50%", transform:"translateX(-50%)", width:240, height:2, background:`linear-gradient(90deg, transparent, ${C.violet}, ${C.cyan}, transparent)`, opacity:0.7 }} />
           <LeftPanel />
-          <RightPanel type={type} />
+          <RightPanel type={type} isMobile={isMobile} />
         </motion.div>
 
         
