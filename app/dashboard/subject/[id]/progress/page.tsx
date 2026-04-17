@@ -8,13 +8,11 @@ import { motion, AnimatePresence, useSpring, useTransform } from "framer-motion"
 function getLocalDateString(d: Date): string {
   return `${d.getFullYear()}-${(d.getMonth()+1).toString().padStart(2,"0")}-${d.getDate().toString().padStart(2,"0")}`;
 }
-
 function getActivityDays(activity: ActivityItem[]): string[] {
   const days = new Set<string>();
   activity.forEach(item => { if (item.date) days.add(getLocalDateString(new Date(item.date))); });
   return Array.from(days).sort();
 }
-
 function getCurrentStreak(activityDays: string[]): number {
   if (!activityDays.length) return 0;
   let streak = 0;
@@ -29,7 +27,6 @@ function getCurrentStreak(activityDays: string[]): number {
   }
   return streak;
 }
-
 function getCalendarGrid(activity: ActivityItem[], numDays = 28) {
   const dayMap: Record<string, {quiz:boolean,read:boolean,mega:boolean}> = {};
   activity.forEach(item => {
@@ -49,7 +46,6 @@ function getCalendarGrid(activity: ActivityItem[], numDays = 28) {
   }
   return grid;
 }
-
 function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleString(undefined, { dateStyle:"medium", timeStyle:"short" });
 }
@@ -167,22 +163,21 @@ function Card({ children, delay = 0, style = {} }: { children: React.ReactNode; 
       style={{
         background: C.surface,
         border: `1px solid ${C.border}`,
-        borderRadius: 20, padding: "28px 28px",
+        borderRadius: 20, padding: "24px 20px",
         position: "relative", overflow: "hidden",
         ...style,
       }}
     >
-      {/* Subtle top strip */}
       <div aria-hidden style={{ position:"absolute",top:0,left:"10%",width:"80%",height:1,background:`linear-gradient(90deg,transparent,${C.border},transparent)` }} />
       {children}
     </motion.div>
   );
 }
 
-function SectionLabel({ children, accent = C.violet }: { children: React.ReactNode; accent?: string }) {
+function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:20 }}>
-      <span style={{ fontSize:10,fontWeight:700,letterSpacing:"0.16em",textTransform:"uppercase",color:C.dim }}>{children}</span>
+      <span style={{ fontSize:10,fontWeight:700,letterSpacing:"0.16em",textTransform:"uppercase",color:C.dim,whiteSpace:"nowrap" }}>{children}</span>
       <div style={{ flex:1,height:1,background:`linear-gradient(90deg,${C.border},transparent)` }} />
     </div>
   );
@@ -207,7 +202,7 @@ function HeatmapCell({ cell }: { cell: ReturnType<typeof getCalendarGrid>[0] }) 
       <motion.div
         whileHover={{ scale: 1.25 }}
         style={{
-          width:28, height:28, borderRadius:6,
+          width:"100%", aspectRatio:"1/1", borderRadius:5,
           background: bg,
           border: cell.isToday ? `1.5px dashed ${C.cyan}` : `1px solid ${accent ? accent+"44" : C.border}`,
           boxShadow: glow,
@@ -230,37 +225,6 @@ function HeatmapCell({ cell }: { cell: ReturnType<typeof getCalendarGrid>[0] }) 
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
-  );
-}
-
-/* ─── Bar chart for time-spent ───────────────────────────────── */
-function TimeBar({ value, max, color, label }: { value:number; max:number; color:string; label:string }) {
-  const pct = max > 0 ? (value/max)*100 : 0;
-  const mins = value / 60;
-  const fmt = mins < 10 ? mins.toFixed(1) : Math.round(mins).toString();
-  return (
-    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:4, flex:1, minWidth:0 }}>
-      <span style={{ fontSize:11,fontWeight:700,color,fontFamily:"'Space Grotesk',sans-serif" }}>
-        {value > 0 ? `${fmt}m` : "—"}
-      </span>
-      <div style={{ width:"100%",maxWidth:16,height:80,background:C.surfaceHi,borderRadius:99,overflow:"hidden",alignSelf:"center" }}>
-        <motion.div
-          initial={{ height:0 }}
-          animate={{ height:`${pct}%` }}
-          transition={{ duration:1, ease:[0.22,1,0.36,1] }}
-          style={{ 
-          width:"100%",
-          background:color,
-          borderRadius:99,
-          boxShadow:`0 0 8px ${color}55`,
-          position:"absolute" as any,
-          bottom:0,
-          left:0,
-        }}
-        />
-      </div>
-      <span style={{ fontSize:10,color:C.dim,fontWeight:600,letterSpacing:"0.04em" }}>{label}</span>
     </div>
   );
 }
@@ -321,7 +285,6 @@ export default function ProgressPage() {
   const [feedbackGiven, setFeedbackGiven]   = useState(false);
   const [pageLoading, setPageLoading]       = useState(true);
 
-  /* Theme */
   useEffect(() => {
     const saved = localStorage.getItem("trisara-theme");
     if (saved) { setTheme(saved); document.documentElement.setAttribute("data-theme", saved); }
@@ -333,7 +296,6 @@ export default function ProgressPage() {
     document.documentElement.setAttribute("data-theme", next);
   };
 
-  /* All fetches */
   useEffect(() => {
     if (!subjectId) return;
     Promise.all([
@@ -359,7 +321,6 @@ export default function ProgressPage() {
     }).catch(console.error).finally(() => setPageLoading(false));
   }, [subjectId]);
 
-  /* Block times */
   useEffect(() => {
     if (!subjectId || !modules.length) return;
     Promise.all(modules.map(mod =>
@@ -376,12 +337,12 @@ export default function ProgressPage() {
     });
   }, [subjectId, modules]);
 
-  /* Redirect on completion */
   useEffect(() => {
-    if (subjectProgress?.percent === 100 && !feedbackGiven) {
+    // Only redirect after data has loaded (pageLoading is false) to avoid premature redirects
+    if (!pageLoading && subjectProgress?.percent === 100 && !feedbackGiven) {
       router.push(`/dashboard/subject/${subjectId}/feedback`);
     }
-  }, [subjectProgress, feedbackGiven, router, subjectId]);
+  }, [pageLoading, subjectProgress, feedbackGiven, router, subjectId]);
 
   if (pageLoading) return <LoadingScreen />;
 
@@ -399,7 +360,48 @@ export default function ProgressPage() {
 
   return (
     <>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&display=swap');`}</style>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&display=swap');
+        
+        * { box-sizing: border-box; }
+
+        /* Responsive grid utilities */
+        .pg-top-grid {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 16px;
+          margin-bottom: 20px;
+        }
+        .pg-two-col {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 16px;
+          margin-bottom: 20px;
+        }
+        .pg-style-time-grid {
+          display: grid;
+          grid-template-columns: 320px 1fr;
+          gap: 16px;
+          margin-bottom: 20px;
+        }
+        .pg-heatmap-grid {
+          display: grid;
+          grid-template-columns: repeat(7, 1fr);
+          gap: 6px;
+          margin-bottom: 6px;
+        }
+
+        @media (max-width: 900px) {
+          .pg-top-grid { grid-template-columns: 1fr 1fr; }
+          .pg-style-time-grid { grid-template-columns: 1fr; }
+        }
+        @media (max-width: 640px) {
+          .pg-top-grid { grid-template-columns: 1fr; }
+          .pg-two-col { grid-template-columns: 1fr; }
+          .pg-style-time-grid { grid-template-columns: 1fr; }
+          .pg-heatmap-grid { gap: 4px; }
+        }
+      `}</style>
       <div style={{ minHeight:"100vh", color:C.text, position:"relative", overflow:"hidden", fontFamily:"'Space Grotesk',sans-serif" }}>
         <Orbs /><GridBg /><ScanLine />
 
@@ -413,11 +415,11 @@ export default function ProgressPage() {
         </button>
 
         {/* Main */}
-        <div style={{ maxWidth:1100,margin:"0 auto",padding:"48px 24px 100px",position:"relative",zIndex:2 }}>
+        <div style={{ maxWidth:1100,margin:"0 auto",padding:"48px 20px 100px",position:"relative",zIndex:2 }}>
 
-          {/* ── BACK + HEADER ── */}
-          <motion.button onClick={() => router.push(`/dashboard/subject/${subjectId}`)}
-            whileHover={{x:-3}} style={{ background:"none",border:"none",padding:"0 0 24px",color:C.dim,fontSize:13,cursor:"pointer",display:"flex",alignItems:"center",gap:6 }}
+          {/* BACK + HEADER */}
+          <motion.button onClick={() => subjectId ? router.push(`/dashboard/subject/${subjectId}`) : router.push("/dashboard")}
+            whileHover={{x:-3}} style={{ background:"none",border:"none",padding:"0 0 24px",color:C.dim,fontSize:13,cursor:"pointer",display:"flex",alignItems:"center",gap:6,fontFamily:"'Space Grotesk',sans-serif" }}
             onMouseEnter={e=>e.currentTarget.style.color=C.violet}
             onMouseLeave={e=>e.currentTarget.style.color=C.dim}
           >
@@ -429,7 +431,7 @@ export default function ProgressPage() {
               Progress Tracker
             </div>
             <h1 style={{
-              fontWeight:800, fontSize:"clamp(26px,4vw,42px)", letterSpacing:"-0.04em",
+              fontWeight:800, fontSize:"clamp(22px,4vw,42px)", letterSpacing:"-0.04em",
               lineHeight:1.1, margin:"0 0 6px",
               background:`linear-gradient(135deg,${C.text} 30%,${C.violet} 100%)`,
               WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent",
@@ -439,27 +441,24 @@ export default function ProgressPage() {
             <p style={{fontSize:14,color:C.muted,margin:0}}>A full picture of how far you've come.</p>
           </motion.div>
 
-          {/* ── DIVIDER ── */}
           <div style={{height:1,marginBottom:36,background:`linear-gradient(90deg,transparent,${C.violet}55,${C.cyan}33,transparent)`}} />
 
           {/* ── TOP ROW: Streak + Completion + Mega Quiz ── */}
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))", gap:16, marginBottom:20 }}>
+          <div className="pg-top-grid">
 
             {/* Streak card */}
             <Card delay={0.05}>
               <div aria-hidden style={{position:"absolute",top:0,left:0,right:0,height:2,background:`linear-gradient(90deg,${C.amber},${C.rose})`}} />
               <SectionLabel>🔥 Daily Streak</SectionLabel>
               <div style={{display:"flex",alignItems:"flex-end",gap:12}}>
-                <span style={{fontWeight:800,fontSize:64,lineHeight:1,background:`linear-gradient(135deg,${C.amber},${C.rose})`,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>
+                <span style={{fontWeight:800,fontSize:"clamp(40px,8vw,64px)",lineHeight:1,background:`linear-gradient(135deg,${C.amber},${C.rose})`,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>
                   <AnimatedNumber value={streak} />
                 </span>
                 <div style={{paddingBottom:8}}>
-                  <div style={{fontSize:14,fontWeight:700,color:C.text}}>day{streak!==1?"s":""} in a row</div>
-                  <div style={{fontSize:12,color:C.dim,marginTop:2}}>{streak===0?"Start learning today!":streak>=7?"You're on fire! 🔥":"Keep it up!"}</div>
+                  <div style={{fontSize:14,fontWeight:700,color:C.text}}>day{streak!==1?"s":""}</div>
+                  <div style={{fontSize:12,color:C.dim,marginTop:2}}>{streak===0?"Start today!":streak>=7?"On fire! 🔥":"Keep it up!"}</div>
                 </div>
               </div>
-
-              {/* Mini week indicator */}
               <div style={{display:"flex",gap:4,marginTop:16}}>
                 {calendarGrid.slice(-7).map((cell,i) => {
                   const active = cell.mega||cell.quiz||cell.read;
@@ -475,16 +474,16 @@ export default function ProgressPage() {
             {subjectProgress && (
               <Card delay={0.1}>
                 <div aria-hidden style={{position:"absolute",top:0,left:0,right:0,height:2,background:`linear-gradient(90deg,${C.violet},${C.cyan})`}} />
-                <SectionLabel>📚 Subject Completion</SectionLabel>
-                <div style={{display:"flex",alignItems:"center",gap:24}}>
-                  <DonutRing percent={subjectProgress.percent} size={120} stroke={12} color={C.violet} glowColor="rgba(167,139,250,0.5)" label="Done" />
-                  <div style={{display:"flex",flexDirection:"column",gap:12,flex:1}}>
+                <SectionLabel>📚 Completion</SectionLabel>
+                <div style={{display:"flex",alignItems:"center",gap:20,flexWrap:"wrap"}}>
+                  <DonutRing percent={subjectProgress.percent} size={100} stroke={10} color={C.violet} glowColor="rgba(167,139,250,0.5)" label="Done" />
+                  <div style={{display:"flex",flexDirection:"column",gap:12,flex:1,minWidth:100}}>
                     <div>
-                      <div style={{fontSize:28,fontWeight:800,color:C.text,fontFamily:"'Space Grotesk',sans-serif",lineHeight:1}}>
+                      <div style={{fontSize:"clamp(22px,5vw,28px)",fontWeight:800,color:C.text,fontFamily:"'Space Grotesk',sans-serif",lineHeight:1}}>
                         <AnimatedNumber value={subjectProgress.completed} />
                         <span style={{fontSize:14,color:C.dim,fontWeight:500}}> / {subjectProgress.total}</span>
                       </div>
-                      <div style={{fontSize:12,color:C.muted,marginTop:2}}>Modules completed</div>
+                      <div style={{fontSize:12,color:C.muted,marginTop:2}}>Modules done</div>
                     </div>
                     <div style={{height:4,borderRadius:99,background:C.surfaceHi,overflow:"hidden"}}>
                       <motion.div initial={{width:0}} animate={{width:`${subjectProgress.percent}%`}} transition={{duration:1.2,ease:[0.22,1,0.36,1]}}
@@ -498,62 +497,60 @@ export default function ProgressPage() {
             {/* Mega quiz score */}
             <Card delay={0.15}>
               <div aria-hidden style={{position:"absolute",top:0,left:0,right:0,height:2,background:`linear-gradient(90deg,${C.cyan},${C.green})`}} />
-              <SectionLabel>🎮 Mega Quiz Score</SectionLabel>
+              <SectionLabel>🎮 Mega Quiz</SectionLabel>
               {megaQuizScore != null ? (
-                <div style={{display:"flex",alignItems:"center",gap:20}}>
-                  <DonutRing percent={Math.round(megaQuizScore*100)} size={120} stroke={12}
+                <div style={{display:"flex",alignItems:"center",gap:16,flexWrap:"wrap"}}>
+                  <DonutRing percent={Math.round(megaQuizScore*100)} size={100} stroke={10}
                     color={megaQuizScore>=0.7 ? C.green : C.rose}
                     glowColor={megaQuizScore>=0.7 ? "rgba(52,211,153,0.5)" : "rgba(251,113,133,0.5)"}
                     label="Score"
                   />
                   <div>
-                    <div style={{fontSize:14,color:megaQuizScore>=0.7?C.green:C.rose,fontWeight:700,marginBottom:6}}>
+                    <div style={{fontSize:13,color:megaQuizScore>=0.7?C.green:C.rose,fontWeight:700,marginBottom:8}}>
                       {megaQuizScore>=0.9?"Outstanding! 🏆":megaQuizScore>=0.7?"Good job! ✓":"Keep practicing"}
                     </div>
                     <motion.button onClick={()=>router.push(`/dashboard/subject/${subjectId}/mega/result-analysis`)}
                       whileHover={{scale:1.04}} whileTap={{scale:0.97}}
-                      style={{padding:"8px 16px",background:C.violetBubble,border:`1px solid ${C.borderHi}`,borderRadius:10,color:C.violet,fontSize:12,fontWeight:700,cursor:"pointer"}}>
+                      style={{padding:"7px 14px",background:C.violetBubble,border:`1px solid ${C.borderHi}`,borderRadius:10,color:C.violet,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'Space Grotesk',sans-serif"}}>
                       View Analysis →
                     </motion.button>
                   </div>
                 </div>
               ) : (
-                <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:8,padding:"20px 0",opacity:0.6}}>
-                  <span style={{fontSize:32}}>🎮</span>
-                  <span style={{fontSize:13,color:C.muted,textAlign:"center"}}>No mega quiz taken yet</span>
+                <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:8,padding:"16px 0",opacity:0.6}}>
+                  <span style={{fontSize:28}}>🎮</span>
+                  <span style={{fontSize:12,color:C.muted,textAlign:"center"}}>No mega quiz taken yet</span>
                 </div>
               )}
             </Card>
           </div>
 
           {/* ── HEATMAP + ACTIVITY ── */}
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:20}}>
+          <div className="pg-two-col">
 
             {/* Heatmap */}
             <Card delay={0.2}>
               <div aria-hidden style={{position:"absolute",top:0,left:0,right:0,height:2,background:`linear-gradient(90deg,${C.cyan},${C.violet})`}} />
-              <SectionLabel>📅 Activity Heatmap · Last 4 Weeks</SectionLabel>
+              <SectionLabel>📅 Activity · Last 4 Weeks</SectionLabel>
 
-              {/* Day labels */}
-              <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:6,marginBottom:6}}>
-                {["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map(d=>(
-                  <div key={d} style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:"0.04em",textAlign:"center"}}>{d}</div>
+              <div className="pg-heatmap-grid" style={{marginBottom:6}}>
+                {["M","T","W","T","F","S","S"].map((d,i)=>(
+                  <div key={i} style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:"0.04em",textAlign:"center"}}>{d}</div>
                 ))}
               </div>
-              {/* Grid */}
-              <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:6,marginBottom:14}}>
+              <div className="pg-heatmap-grid" style={{marginBottom:14}}>
                 {calendarGrid.map((cell,i)=><HeatmapCell key={i} cell={cell} />)}
               </div>
-              {/* Legend */}
-              <div style={{display:"flex",gap:14,flexWrap:"wrap",fontSize:11,color:C.dim}}>
+
+              <div style={{display:"flex",gap:10,flexWrap:"wrap",fontSize:11,color:C.dim}}>
                 {[
-                  {color:"rgba(167,139,250,0.35)",border:"rgba(167,139,250,0.6)",label:"Mega Quiz"},
+                  {color:"rgba(167,139,250,0.35)",border:"rgba(167,139,250,0.6)",label:"Mega"},
                   {color:"rgba(251,191,36,0.3)",border:"rgba(251,191,36,0.6)",label:"Quiz"},
-                  {color:"rgba(34,211,238,0.25)",border:"rgba(34,211,238,0.6)",label:"Reading"},
+                  {color:"rgba(34,211,238,0.25)",border:"rgba(34,211,238,0.6)",label:"Read"},
                   {color:C.surfaceHi,border:C.border,label:"None"},
                 ].map(l=>(
-                  <span key={l.label} style={{display:"flex",alignItems:"center",gap:5}}>
-                    <span style={{width:12,height:12,borderRadius:3,background:l.color,border:`1px solid ${l.border}`,display:"inline-block"}} />
+                  <span key={l.label} style={{display:"flex",alignItems:"center",gap:4}}>
+                    <span style={{width:11,height:11,borderRadius:3,background:l.color,border:`1px solid ${l.border}`,display:"inline-block",flexShrink:0}} />
                     {l.label}
                   </span>
                 ))}
@@ -573,24 +570,24 @@ export default function ProgressPage() {
                   let label = item.name || "Activity";
                   if (item.type==="read") {
                     const m = item.name?.match(/Module (\d+) - Chapter (\d+)/);
-                    label = m ? `Module ${m[1]}: Chapter ${Number(m[2])+1} Read` : "Chapter Read";
+                    label = m ? `M${m[1]} Ch${Number(m[2])+1} Read` : "Chapter Read";
                   } else if (item.type==="quiz") {
                     const m = item.name?.match(/Module (\d+)/);
                     label = m ? `Module ${m[1]} Quiz` : "Module Quiz";
                   } else if (item.type==="mega-quiz") {
-                    label = "Mega-Quiz Taken";
+                    label = "Mega-Quiz";
                   }
                   return (
                     <motion.div key={idx} initial={{opacity:0,x:-10}} animate={{opacity:1,x:0}} transition={{delay:0.3+idx*0.05}}
-                      style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",borderRadius:10,background:`${color}0d`,border:`1px solid ${color}22`}}>
-                      <span style={{fontSize:16,flexShrink:0}}>{icon}</span>
-                      <span style={{flex:1,fontSize:13,fontWeight:600,color:C.text}}>{label}</span>
+                      style={{display:"flex",alignItems:"center",gap:10,padding:"8px 10px",borderRadius:10,background:`${color}0d`,border:`1px solid ${color}22`,overflow:"hidden"}}>
+                      <span style={{fontSize:14,flexShrink:0}}>{icon}</span>
+                      <span style={{flex:1,fontSize:12,fontWeight:600,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{label}</span>
                       {item.type==="mega-quiz" && typeof item.score==="number" && (
-                        <span style={{fontSize:12,fontWeight:700,color:item.score>=0.7?C.green:C.rose}}>
+                        <span style={{fontSize:11,fontWeight:700,color:item.score>=0.7?C.green:C.rose,flexShrink:0}}>
                           {(item.score*100).toFixed(0)}%
                         </span>
                       )}
-                      <span style={{fontSize:11,color:C.dim,flexShrink:0}}>{formatDate(item.date)}</span>
+                      <span style={{fontSize:10,color:C.dim,flexShrink:0,display:"none"}} className="pg-activity-date">{formatDate(item.date)}</span>
                     </motion.div>
                   );
                 })}
@@ -610,12 +607,12 @@ export default function ProgressPage() {
                   return (
                     <motion.div key={row.module_order} initial={{opacity:0,x:-12}} animate={{opacity:1,x:0}} transition={{delay:0.35+i*0.05}}
                       style={{display:"flex",alignItems:"center",gap:12}}>
-                      <span style={{fontSize:12,fontWeight:700,color:C.dim,width:72,flexShrink:0}}>Module {row.module_order}</span>
+                      <span style={{fontSize:12,fontWeight:700,color:C.dim,width:68,flexShrink:0}}>Module {row.module_order}</span>
                       <div style={{flex:1,height:8,borderRadius:99,background:C.surfaceHi,overflow:"hidden"}}>
                         <motion.div initial={{width:0}} animate={{width:`${pct}%`}} transition={{duration:1,delay:0.4+i*0.05,ease:[0.22,1,0.36,1]}}
                           style={{height:"100%",borderRadius:99,background:color,boxShadow:`0 0 8px ${color}55`}} />
                       </div>
-                      <span style={{fontSize:13,fontWeight:800,color,width:40,textAlign:"right",fontFamily:"'Space Grotesk',sans-serif"}}>
+                      <span style={{fontSize:13,fontWeight:800,color,width:38,textAlign:"right",fontFamily:"'Space Grotesk',sans-serif"}}>
                         {pct}%
                       </span>
                     </motion.div>
@@ -626,7 +623,7 @@ export default function ProgressPage() {
           )}
 
           {/* ── LEARNING STYLE + TIME CHART ── */}
-          <div style={{display:"grid",gridTemplateColumns:"320px 1fr",gap:16,marginBottom:20}}>
+          <div className="pg-style-time-grid">
 
             {/* Learning style */}
             {profile && (
@@ -653,31 +650,28 @@ export default function ProgressPage() {
             {modules.length > 0 && (
               <Card delay={0.32}>
                 <div aria-hidden style={{position:"absolute",top:0,left:0,right:0,height:2,background:`linear-gradient(90deg,${C.violet},${C.rose})`}} />
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
-                  <SectionLabel>⏱ Time Spent by Content Type (mins)</SectionLabel>
-                  <div style={{display:"flex",gap:12,fontSize:11,color:C.dim}}>
-                    {[{color:"#4ade80",label:"Text"},{color:C.violet,label:"Audio"},{color:C.amber,label:"Visual"}].map(l=>(
-                      <span key={l.label} style={{display:"flex",alignItems:"center",gap:4}}>
-                        <span style={{width:10,height:10,borderRadius:2,background:l.color,display:"inline-block"}} />{l.label}
-                      </span>
-                    ))}
-                  </div>
+                <SectionLabel>⏱ Time by Content Type (mins)</SectionLabel>
+                <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginBottom:12,flexWrap:"wrap"}}>
+                  {[{color:"#4ade80",label:"Text"},{color:C.violet,label:"Audio"},{color:C.amber,label:"Visual"}].map(l=>(
+                    <span key={l.label} style={{display:"flex",alignItems:"center",gap:4,fontSize:11,color:C.dim}}>
+                      <span style={{width:10,height:10,borderRadius:2,background:l.color,display:"inline-block"}} />{l.label}
+                    </span>
+                  ))}
                 </div>
-                <div style={{display:"flex",gap:16,overflowX:"auto",paddingBottom:4}}>
+                <div style={{display:"flex",gap:12,overflowX:"auto",paddingBottom:4}}>
                   {modules.map((mod,i)=>{
                     const t = blockTimes[mod.module_order]||{text:0,audio:0,visual:0};
                     return (
-                      <div key={mod.module_order} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:6,minWidth:56}}>
-                        {/* Grouped mini bars */}
+                      <div key={mod.module_order} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:6,minWidth:48}}>
                         <div style={{display:"flex",gap:3,alignItems:"flex-end",height:90}}>
                           {[{v:t.text,c:"#4ade80"},{v:t.audio,c:C.violet},{v:t.visual,c:C.amber}].map((bar,bi)=>{
                             const h = maxBlockTime > 0 ? Math.max((bar.v/maxBlockTime)*80,0) : 0;
                             const mins = bar.v/60;
                             return (
-                              <div key={bi} style={{width:14,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"flex-end",height:90}}>
-                                {bar.v > 0 && <span style={{fontSize:9,color:bar.c,fontWeight:700,marginBottom:2}}>{mins<10?mins.toFixed(1):Math.round(mins)}</span>}
+                              <div key={bi} style={{width:12,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"flex-end",height:90}}>
+                                {bar.v > 0 && <span style={{fontSize:8,color:bar.c,fontWeight:700,marginBottom:2}}>{mins<10?mins.toFixed(1):Math.round(mins)}</span>}
                                 <motion.div initial={{height:0}} animate={{height:h}} transition={{duration:1,delay:0.4+i*0.06,ease:[0.22,1,0.36,1]}}
-                                  style={{width:14,borderRadius:"4px 4px 0 0",background:bar.c,boxShadow:`0 0 6px ${bar.c}55`}} />
+                                  style={{width:12,borderRadius:"4px 4px 0 0",background:bar.c,boxShadow:`0 0 6px ${bar.c}55`}} />
                               </div>
                             );
                           })}
@@ -694,13 +688,13 @@ export default function ProgressPage() {
           {/* ── CONTINUE / COMPLETION CTA ── */}
           {subjectProgress && (
             <motion.div initial={{opacity:0,y:16}} animate={{opacity:1,y:0}} transition={{delay:0.4,duration:0.45}}
-              style={{display:"flex",justifyContent:"center",gap:14,flexWrap:"wrap",marginTop:8}}>
+              style={{display:"flex",justifyContent:"center",gap:12,flexWrap:"wrap",marginTop:8}}>
               {subjectProgress.completed >= subjectProgress.total ? (
                 <div style={{
-                  padding:"24px 40px",borderRadius:20,textAlign:"center",
+                  padding:"24px 32px",borderRadius:20,textAlign:"center",
                   background:C.greenSoft, border:`1px solid ${C.greenBorder}`,
-                  fontSize:18,fontWeight:800,color:C.green,
-                  boxShadow:`0 0 32px ${C.green}22`,
+                  fontSize:"clamp(14px,3vw,18px)",fontWeight:800,color:C.green,
+                  boxShadow:`0 0 32px ${C.green}22`, width:"100%", maxWidth:500,
                 }}>
                   🎉 Congratulations! You've completed all modules!
                 </div>
@@ -710,9 +704,10 @@ export default function ProgressPage() {
                   <motion.button onClick={()=>router.push(`/dashboard/subject/${subjectId}/module/${nextMod.module_order}`)}
                     whileHover={{scale:1.04}} whileTap={{scale:0.97}}
                     style={{
-                      padding:"14px 32px",background:`linear-gradient(135deg,${C.violet},${C.cyan})`,
+                      padding:"14px 28px",background:`linear-gradient(135deg,${C.violet},${C.cyan})`,
                       border:"none",borderRadius:14,color:"#0d0918",fontSize:15,fontWeight:800,
                       cursor:"pointer",boxShadow:`0 0 24px ${C.violetGlow}`,letterSpacing:"0.01em",
+                      fontFamily:"'Space Grotesk',sans-serif",
                     }}>
                     Continue → Module {nextMod.module_order}
                   </motion.button>
@@ -722,9 +717,10 @@ export default function ProgressPage() {
                 <motion.button onClick={()=>router.push(`/dashboard/subject/${subjectId}/mega/result-analysis`)}
                   whileHover={{scale:1.04}} whileTap={{scale:0.97}}
                   style={{
-                    padding:"14px 32px",background:C.violetBubble,
+                    padding:"14px 24px",background:C.violetBubble,
                     border:`1.5px solid ${C.violet}`,borderRadius:14,color:C.violet,
-                    fontSize:15,fontWeight:800,cursor:"pointer",letterSpacing:"0.01em",
+                    fontSize:14,fontWeight:800,cursor:"pointer",letterSpacing:"0.01em",
+                    fontFamily:"'Space Grotesk',sans-serif",
                   }}>
                   🎮 View Mega Quiz Analysis
                 </motion.button>

@@ -383,7 +383,7 @@ export default function MarkdownRenderer({
         <div
           style={{
             position: "absolute",
-            inset: 0,
+            inset: 0, pointerEvents: "none",
             backgroundImage:
               "linear-gradient(rgba(167,139,250,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(167,139,250,0.04) 1px, transparent 1px)",
             backgroundSize: "56px 56px",

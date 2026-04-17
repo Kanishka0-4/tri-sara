@@ -73,9 +73,38 @@ export default function FloatingChatbot({ subjectId }) {
   };
 
   // Panel size switches between compact and fullscreen
-  const panelStyle = maximized
-    ? { position: "fixed", inset: 0, borderRadius: 0, background: "#fff", display: "flex", flexDirection: "column", zIndex: 9999 }
-    : { position: "fixed", bottom: 24, right: 24, width: 340, height: 500, borderRadius: 16, background: "#fff", border: "1px solid rgba(0,0,0,0.08)", boxShadow: "0 8px 32px rgba(0,0,0,0.12)", display: "flex", flexDirection: "column", overflow: "hidden", zIndex: 9999 };
+ const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
+
+const panelStyle = maximized
+  ? {
+      position: isMobile ? "fixed" : "fixed",
+      top: isMobile ? "auto" : 0,
+      left: isMobile ? "auto" : 0,
+      right: 0,
+      bottom: 0,
+      width: isMobile ? "100%" : "100%",
+      height: isMobile ? "85vh" : "100vh",   // 🔥 NOT full screen on mobile
+      borderRadius: isMobile ? "16px 16px 0 0" : 0,
+      background: "#fff",
+      display: "flex",
+      flexDirection: "column",
+      zIndex: 999,
+    }
+  : {
+      position: "fixed",
+      bottom: 24,
+      right: 24,
+      width: isMobile ? "90%" : 340,
+      height: isMobile ? "70vh" : 500,
+      borderRadius: 16,
+      background: "#fff",
+      border: "1px solid rgba(0,0,0,0.08)",
+      boxShadow: "0 8px 32px rgba(0,0,0,0.12)",
+      display: "flex",
+      flexDirection: "column",
+      overflow: "hidden",
+      zIndex: 100,
+    };
 
   const innerMax = maximized ? { maxWidth: 720, margin: "0 auto", width: "100%", boxSizing: "border-box" } : {};
 
