@@ -23,14 +23,18 @@ function getRanking(profile: LearningProfile): string[] {
 
 function normaliseContent(src: string): string {
   return src
+    // Fix malformed closing tags that have a newline before the slash
     .replace(/\[\s*\n\s*\/(TEXT|VISUAL|AUDIO)\]/gi, "[/$1]")
-    .replace(/^\[(TEXT|VISUAL|AUDIO)\](?!\s*\n)/gm, "")
-    .replace(/^\*\s+/gm, "- ")
+    // Strip quiz-related content
     .replace(/#{1,3}\s*(Quiz|Questions?|Multiple Choice|MCQ).*\n?/gi, "")
     .replace(/\d+\.\s*.*\?\s*\n?(A\)|B\)|C\)|D\)).*\n?/gi, "")
     .replace(/^[A-D]\)\s*.*\n?/gm, "")
     .replace(/Correct\s*(answer|Answer|option|Option).*:?\s*[A-D]\s*\n?/gi, "")
-    .replace(/Answer\s*:\s*[A-D]\s*\n?/gi, "");
+    .replace(/Answer\s*:\s*[A-D]\s*\n?/gi, "")
+    // Normalise bullet points
+    .replace(/^\*\s+/gm, "- ");
+  // NOTE: Do NOT strip [TEXT], [VISUAL], [AUDIO] opening tags here —
+  // parseTaggedParts needs them to detect block boundaries.
 }
 
 function stripKeyTakeaways(block: string): string {
@@ -39,10 +43,12 @@ function stripKeyTakeaways(block: string): string {
 
 function parseTaggedParts(src: string) {
   const parts: { type: "visual" | "audio" | "text"; content: string }[] = [];
+  // Match [TAG]...[/TAG] — case-insensitive, handles optional whitespace
   const tagRegex = /\[\s*(TEXT|VISUAL|AUDIO)\s*\]([\s\S]*?)\[\s*\/\s*\1\s*\]/gi;
   let lastIndex = 0;
   let m: RegExpExecArray | null;
   while ((m = tagRegex.exec(src)) !== null) {
+    // Any plain text before this tag
     if (m.index > lastIndex) {
       const plain = src.slice(lastIndex, m.index).trim();
       if (plain) parts.push({ type: "text", content: plain });
@@ -52,10 +58,12 @@ function parseTaggedParts(src: string) {
     if (tagContent) parts.push({ type: tagType, content: tagContent });
     lastIndex = tagRegex.lastIndex;
   }
+  // Trailing content after the last closing tag
   if (lastIndex < src.length) {
     const rest = src.slice(lastIndex).trim();
     if (rest) parts.push({ type: "text", content: rest });
   }
+  // Fallback: if nothing was tagged, treat the whole thing as text
   if (parts.length === 0 && src.trim()) parts.push({ type: "text", content: src.trim() });
   return parts;
 }
@@ -69,11 +77,11 @@ export default function MarkdownRenderer({
   quiz = [],
   onQuizComplete,
 }: MarkdownRendererProps) {
-  const ranking       = getRanking(profile);
+  const ranking        = getRanking(profile);
   const isAudioPrimary = ranking[0] === "audio";
 
-  const normalised   = normaliseContent(content);
-  const taggedParts  = parseTaggedParts(normalised);
+  const normalised  = normaliseContent(content);
+  const taggedParts = parseTaggedParts(normalised);
 
   const audioContent = taggedParts
     .filter(p => p.type === "audio")
@@ -84,22 +92,18 @@ export default function MarkdownRenderer({
     if (setAudioContent && audioContent) setAudioContent(audioContent);
   }, [audioContent, setAudioContent]);
 
-  /* ── Theme — dark by default ── */
+  /* ── Theme ── */
   const [theme, setTheme] = useState<"dark" | "light">("dark");
-
   useEffect(() => {
-    /* hydrate from DOM after mount */
     const saved = (document.documentElement.getAttribute("data-theme") as "dark" | "light") || "dark";
     setTheme(saved);
   }, []);
-
   const toggleTheme = () => {
     const next = theme === "dark" ? "light" : "dark";
     setTheme(next);
     document.documentElement.setAttribute("data-theme", next);
     try { localStorage.setItem("trisara-theme", next); } catch {}
   };
-
   const isDark = theme === "dark";
 
   return (
@@ -111,18 +115,15 @@ export default function MarkdownRenderer({
         .md-root {
           font-family: 'Space Grotesk', sans-serif;
           color: var(--ts-text);
-          max-width: 2000px;
+          max-width: 100%;
           margin: 0 auto;
           line-height: 1.78;
-          padding: 0.5rem 0.5rem 4rem;
+          padding: 0;
           word-wrap: break-word;
           overflow-wrap: break-word;
+          overflow-x: hidden;
           position: relative;
         }
-          .md-root {
-  background: var(--ts-bg);
-  min-height: 100vh;
-}
 
         /* ───── Theme toggle ───── */
         .md-toggle-row {
@@ -144,8 +145,6 @@ export default function MarkdownRenderer({
           font-weight: 600;
           letter-spacing: 0.04em;
           cursor: pointer;
-          backdrop-filter: blur(10px);
-          -webkit-backdrop-filter: blur(10px);
           transition: background 0.18s, box-shadow 0.18s, color 0.18s;
           white-space: nowrap;
         }
@@ -159,27 +158,32 @@ export default function MarkdownRenderer({
           background: var(--ts-surface);
           border: 1px solid var(--ts-border);
           border-radius: 16px;
-          padding: 1.9rem 2.2rem;
-          margin-bottom: 1.8rem;
+          padding: 1.4rem 1.6rem;
+          margin-bottom: 1.25rem;
           position: relative;
-
           box-shadow:
             0 0 0 1px var(--ts-border-hi),
-            0 10px 40px rgba(0, 0, 0, 0.6),
-            0 0 60px var(--ts-violet-soft);
-
+            0 10px 40px rgba(0,0,0,0.4),
+            0 0 40px var(--ts-violet-soft);
           transition: all 0.25s ease;
+          overflow-x: hidden;
+        }
+        @media (max-width: 640px) {
+          .md-text-block {
+            padding: 1rem 1rem;
+            border-radius: 12px;
+          }
         }
         .md-text-block:hover {
           border-color: var(--ts-border-hi);
           box-shadow: 0 2px 20px var(--ts-violet-glow);
         }
 
-        /* Visual block: gradient border + inner glow */
+        /* Visual block */
         .md-visual-block {
           border-radius: 14px;
-          padding: 1.75rem 2rem;
-          margin-bottom: 1.5rem;
+          padding: 1.4rem 1.6rem;
+          margin-bottom: 1.25rem;
           position: relative;
           overflow: hidden;
           background: var(--ts-surface-hi);
@@ -188,6 +192,12 @@ export default function MarkdownRenderer({
             0 4px 28px var(--ts-violet-glow),
             inset 0 0 40px var(--ts-violet-soft);
           transition: box-shadow 0.2s;
+        }
+        @media (max-width: 640px) {
+          .md-visual-block {
+            padding: 1rem 0.85rem;
+            border-radius: 12px;
+          }
         }
         .md-visual-block::before {
           content: '';
@@ -239,11 +249,11 @@ export default function MarkdownRenderer({
           color: var(--ts-text);
         }
         .md-root h1 {
-          font-size: 1.85rem;
+          font-size: clamp(1.3rem, 4vw, 1.85rem);
           margin-bottom: 1rem;
         }
         .md-root h2 {
-          font-size: 1.3rem;
+          font-size: clamp(1.05rem, 3vw, 1.3rem);
           border-bottom: 1px solid var(--ts-border-hi);
           padding-bottom: 0.4rem;
           margin-top: 1.5rem;
@@ -257,6 +267,8 @@ export default function MarkdownRenderer({
         .md-root p {
           color: var(--ts-text);
           margin-bottom: 0.75rem;
+          font-size: clamp(0.88rem, 2.5vw, 1rem);
+          line-height: 1.75;
         }
         .md-root strong {
           color: var(--ts-violet);
@@ -278,6 +290,8 @@ export default function MarkdownRenderer({
           position: relative;
           margin-bottom: 0.4rem;
           color: var(--ts-text);
+          font-size: clamp(0.85rem, 2.5vw, 0.95rem);
+          line-height: 1.65;
         }
         .md-root ul li::before {
           content: '▸';
@@ -294,6 +308,7 @@ export default function MarkdownRenderer({
         .md-root ol li {
           margin-bottom: 0.4rem;
           color: var(--ts-text);
+          font-size: clamp(0.85rem, 2.5vw, 0.95rem);
         }
         .md-root ol li::marker {
           color: var(--ts-violet);
@@ -304,7 +319,7 @@ export default function MarkdownRenderer({
         .md-root blockquote {
           border-left: 3px solid var(--ts-violet);
           background: var(--ts-violet-bubble);
-          padding: 0.9rem 1.4rem;
+          padding: 0.9rem 1.2rem;
           border-radius: 0 10px 10px 0;
           color: var(--ts-text-muted);
           font-style: italic;
@@ -319,19 +334,22 @@ export default function MarkdownRenderer({
           border-radius: 5px;
           font-size: 0.87em;
           font-family: 'JetBrains Mono','Fira Code','Cascadia Code',monospace;
+          word-break: break-all;
         }
         .md-root pre {
-          background: var(--ts-su+=-face-hi);
+          background: var(--ts-surface-hi);
           border: 1px solid var(--ts-border);
           border-radius: 12px;
-          padding: 1.25rem;
+          padding: 1.1rem;
           overflow-x: auto;
           margin: 1rem 0;
+          -webkit-overflow-scrolling: touch;
         }
         .md-root pre code {
           background: none;
           padding: 0;
           color: var(--ts-cyan);
+          word-break: normal;
         }
 
         /* ───── Table ───── */
@@ -339,18 +357,22 @@ export default function MarkdownRenderer({
           width: 100%;
           border-collapse: collapse;
           margin: 1.25rem 0;
-          font-size: 0.88rem;
+          font-size: clamp(0.78rem, 2vw, 0.88rem);
+          display: block;
+          overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
         }
         .md-root table th {
           background: var(--ts-violet-bubble);
           color: var(--ts-violet);
           font-weight: 700;
           text-align: left;
-          padding: 0.6rem 1rem;
+          padding: 0.6rem 0.85rem;
           border-bottom: 2px solid var(--ts-border-hi);
+          white-space: nowrap;
         }
         .md-root table td {
-          padding: 0.55rem 1rem;
+          padding: 0.5rem 0.85rem;
           border-bottom: 1px solid var(--ts-border);
           color: var(--ts-text-muted);
         }
@@ -373,22 +395,8 @@ export default function MarkdownRenderer({
           border-top: 1px solid var(--ts-border);
           margin: 2rem 0;
         }
-
-        /* ───── Hide raw tags ───── */
-        .md-root audio,
-        .md-root text { display: none !important; }
       `}</style>
-      
-      {/* GRID BG */}
-        <div
-          style={{
-            position: "absolute",
-            inset: 0, pointerEvents: "none",
-            backgroundImage:
-              "linear-gradient(rgba(167,139,250,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(167,139,250,0.04) 1px, transparent 1px)",
-            backgroundSize: "56px 56px",
-          }}
-        />
+
       <div className="md-root">
 
         {/* ── Theme toggle ── */}
@@ -407,6 +415,7 @@ export default function MarkdownRenderer({
 
         {/* ── Content blocks ── */}
         {taggedParts.map((part, index) => {
+
           /* VISUAL */
           if (part.type === "visual") {
             return (
@@ -471,7 +480,7 @@ export default function MarkdownRenderer({
 
         {/* ── Chapter audio player ── */}
         {audioContent && (
-          <div style={{ marginTop: "2rem" }}>
+          <div style={{ marginTop: "1.5rem" }}>
             <AudioRenderer block={audioContent} variant="chapter" />
           </div>
         )}

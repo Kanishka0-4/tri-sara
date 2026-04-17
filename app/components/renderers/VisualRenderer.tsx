@@ -3,46 +3,98 @@ import { useEffect } from "react";
 
 interface VisualProps { block: string; }
 
-/* ── Inject shared CSS (CSS-var-driven, auto dark/light) ── */
 const VISUAL_STYLES = `
   @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
-  .vr-root { font-family: 'Space Grotesk', sans-serif; }
+  .vr-root {
+    font-family: 'Space Grotesk', sans-serif;
+    overflow-x: hidden;
+    width: 100%;
+  }
 
   /* Flow */
   .vr-flow-card {
     background: var(--ts-surface-hi);
     border: 1px solid var(--ts-border);
     border-radius: 12px;
-    padding: 0.85rem 1.1rem;
+    padding: 0.85rem 1rem;
     transition: border-color 0.18s, box-shadow 0.18s;
+    min-width: 0;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
   }
   .vr-flow-card:hover {
     border-color: var(--ts-border-hi);
     box-shadow: 0 2px 16px var(--ts-violet-glow);
   }
-  .vr-flow-label { font-weight: 700; color: var(--ts-violet); font-size: 0.9rem; line-height: 1.35; }
-  .vr-flow-desc  { font-size: 0.83rem; color: var(--ts-text-muted); margin-top: 0.3rem; line-height: 1.6; }
-  .vr-flow-sub   { font-size: 0.8rem; color: var(--ts-text-muted); margin-bottom: 0.22rem; line-height: 1.55; }
+  .vr-flow-label {
+    font-weight: 700;
+    color: var(--ts-violet);
+    font-size: 0.9rem;
+    line-height: 1.35;
+    word-wrap: break-word;
+  }
+  .vr-flow-desc  {
+    font-size: 0.83rem;
+    color: var(--ts-text-muted);
+    margin-top: 0.3rem;
+    line-height: 1.6;
+    word-wrap: break-word;
+  }
+  .vr-flow-sub   {
+    font-size: 0.8rem;
+    color: var(--ts-text-muted);
+    margin-bottom: 0.22rem;
+    line-height: 1.55;
+  }
 
   /* Tree / Hierarchy */
-  .vr-tree-node  { border-radius: 0 10px 10px 0; padding: 0.6rem 1rem; }
-  .vr-tree-label { font-weight: 700; font-size: 0.88rem; color: var(--ts-text); }
-  .vr-tree-desc  { font-size: 0.78rem; color: var(--ts-text-muted); margin-top: 0.22rem; line-height: 1.55; }
+  .vr-tree-node  {
+    border-radius: 0 10px 10px 0;
+    padding: 0.6rem 1rem;
+    min-width: 0;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+  }
+  .vr-tree-label {
+    font-weight: 700;
+    font-size: 0.88rem;
+    color: var(--ts-text);
+    word-wrap: break-word;
+  }
+  .vr-tree-desc  {
+    font-size: 0.78rem;
+    color: var(--ts-text-muted);
+    margin-top: 0.22rem;
+    line-height: 1.55;
+    word-wrap: break-word;
+  }
 
   /* Comparison */
-  .vr-compare-feat { font-size: 0.81rem; color: var(--ts-text-muted); margin-bottom: 0.25rem; line-height: 1.55; }
+  .vr-compare-feat {
+    font-size: 0.81rem;
+    color: var(--ts-text-muted);
+    margin-bottom: 0.25rem;
+    line-height: 1.55;
+    word-wrap: break-word;
+  }
 
   /* Cycle */
-  .vr-cycle-desc { font-size: 0.81rem; color: var(--ts-text-muted); line-height: 1.55; }
+  .vr-cycle-desc {
+    font-size: 0.81rem;
+    color: var(--ts-text-muted);
+    line-height: 1.55;
+    word-wrap: break-word;
+  }
 
   /* Title */
   .vr-title {
-    margin: 0 0 1.35rem;
-    font-size: 1.05rem;
+    margin: 0 0 1.1rem;
+    font-size: clamp(0.95rem, 3vw, 1.05rem);
     font-weight: 700;
     color: var(--ts-text);
     letter-spacing: -0.02em;
+    word-wrap: break-word;
   }
 
   /* Unsupported */
@@ -54,6 +106,25 @@ const VISUAL_STYLES = `
     font-size: 0.85rem;
     border-radius: 12px;
     padding: 1rem 1.25rem;
+  }
+
+  /* Cycle pills — wrap nicely on mobile */
+  .vr-cycle-pills {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
+    margin-bottom: 1rem;
+  }
+
+  /* Comparison grid — single column on mobile */
+  .vr-compare-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+  @media (min-width: 480px) {
+    .vr-compare-grid-2 { grid-template-columns: repeat(2, 1fr); }
   }
 `;
 
@@ -69,7 +140,7 @@ function InjectStyles() {
   return null;
 }
 
-/* ── Parsers (unchanged logic) ── */
+/* ── Parsers ── */
 function getMeta(block: string) {
   return {
     type:  block.match(/^type:\s*(.+)/m)?.[1]?.trim() ?? "",
@@ -164,7 +235,7 @@ function parseTree(block: string): TreeNode[] {
   return walk(0, 0).nodes;
 }
 
-/* ── Palette — CSS var-based so both themes work ── */
+/* ── Palette ── */
 const DEPTH_PALETTE = [
   { accent: "var(--ts-violet)", border: "var(--ts-border-hi)",    bg: "var(--ts-violet-soft)"  },
   { accent: "var(--ts-cyan)",   border: "rgba(34,211,238,0.25)",   bg: "var(--ts-cyan-glow)"    },
@@ -172,10 +243,10 @@ const DEPTH_PALETTE = [
   { accent: "var(--ts-amber)",  border: "var(--ts-amber-border)",  bg: "var(--ts-amber-soft)"   },
 ];
 const COMPARE_COLORS = [
-  { accent: "var(--ts-cyan)",   border: "rgba(34,211,238,0.25)"    },
-  { accent: "var(--ts-amber)",  border: "var(--ts-amber-border)"   },
-  { accent: "var(--ts-green)",  border: "var(--ts-green-border)"   },
-  { accent: "var(--ts-violet)", border: "var(--ts-border-hi)"      },
+  { accent: "var(--ts-cyan)",   border: "rgba(34,211,238,0.25)"  },
+  { accent: "var(--ts-amber)",  border: "var(--ts-amber-border)" },
+  { accent: "var(--ts-green)",  border: "var(--ts-green-border)" },
+  { accent: "var(--ts-violet)", border: "var(--ts-border-hi)"    },
 ];
 const CYCLE_COLORS = [
   "var(--ts-violet)",
@@ -198,31 +269,31 @@ function FlowVisual({ title, block }: { title: string; block: string }) {
           const subs  = item.steps.length ? item.steps : item.features;
           const last  = i === items.length - 1;
           return (
-            <div key={i} style={{ display: "flex", gap: "0.9rem" }}>
+            <div key={i} style={{ display: "flex", gap: "0.75rem" }}>
               {/* Spine */}
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0 }}>
                 <div style={{
-                  width: 34, height: 34, borderRadius: "50%", flexShrink: 0,
+                  width: 30, height: 30, borderRadius: "50%", flexShrink: 0,
                   background: "linear-gradient(135deg, var(--ts-violet), #818cf8)",
                   color: "#fff",
                   display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: "0.78rem", fontWeight: 700,
+                  fontSize: "0.72rem", fontWeight: 700,
                   boxShadow: "0 2px 10px var(--ts-violet-glow)",
                 }}>{i + 1}</div>
                 {!last && (
                   <div style={{
-                    width: 2, flex: 1, minHeight: 20,
+                    width: 2, flex: 1, minHeight: 16,
                     background: "linear-gradient(var(--ts-violet), transparent)",
                     margin: "3px 0", opacity: 0.35,
                   }} />
                 )}
               </div>
               {/* Card */}
-              <div className="vr-flow-card" style={{ flex: 1, marginBottom: last ? 0 : "0.45rem" }}>
+              <div className="vr-flow-card" style={{ flex: 1, marginBottom: last ? 0 : "0.4rem", minWidth: 0 }}>
                 <div className="vr-flow-label">{label}</div>
                 {desc && <div className="vr-flow-desc">{desc}</div>}
                 {subs.length > 0 && (
-                  <ul style={{ margin: "0.45rem 0 0", paddingLeft: "1.1rem" }}>
+                  <ul style={{ margin: "0.4rem 0 0", paddingLeft: "1rem" }}>
                     {subs.map((s, si) => (
                       <li key={si} className="vr-flow-sub">{s}</li>
                     ))}
@@ -240,19 +311,22 @@ function FlowVisual({ title, block }: { title: string; block: string }) {
 /* ══ HIERARCHY ══ */
 function TreeRow({ node, depth }: { node: TreeNode; depth: number }) {
   const c = DEPTH_PALETTE[Math.min(depth, DEPTH_PALETTE.length - 1)];
+  // On mobile, reduce indent depth to avoid overflow
+  const indentPx = Math.min(depth * 20, 40);
   return (
     <div style={{ display: "flex", flexDirection: "column" }}>
-      <div style={{ display: "flex", alignItems: "flex-start", marginBottom: node.children.length ? "0.25rem" : "0.45rem" }}>
+      <div style={{ display: "flex", alignItems: "flex-start", marginBottom: node.children.length ? "0.25rem" : "0.4rem" }}>
         {depth > 0 && (
-          <div style={{ width: depth * 26, flexShrink: 0, position: "relative", alignSelf: "stretch" }}>
-            <div style={{ position: "absolute", left: depth * 26 - 14, top: 0, bottom: 0, width: 2, background: `${c.accent}30` }} />
-            <div style={{ position: "absolute", left: depth * 26 - 14, top: 18, width: 12, height: 2, background: `${c.accent}50` }} />
+          <div style={{ width: indentPx, flexShrink: 0, position: "relative", alignSelf: "stretch" }}>
+            <div style={{ position: "absolute", left: indentPx - 12, top: 0, bottom: 0, width: 2, background: `${c.accent}30` }} />
+            <div style={{ position: "absolute", left: indentPx - 12, top: 16, width: 10, height: 2, background: `${c.accent}50` }} />
           </div>
         )}
         <div className="vr-tree-node" style={{
           flex: 1, background: c.bg,
           border: `1px solid ${c.border}`,
           borderLeft: `3px solid ${c.accent}`,
+          minWidth: 0,
         }}>
           <div className="vr-tree-label">{node.name}</div>
           {node.description && <div className="vr-tree-desc">{node.description}</div>}
@@ -273,28 +347,30 @@ function HierarchyVisual({ title, block }: { title: string; block: string }) {
           {parseTree(block).map((node, i) => <TreeRow key={i} node={node} depth={0} />)}
         </div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.45rem" }}>
           {splitTopLevel(dataBody(block)).map((raw, i) => {
             const item  = parseItem(raw);
             const label = bestLabel(item);
             const c     = DEPTH_PALETTE[i % DEPTH_PALETTE.length];
             return (
               <div key={i} style={{
-                display: "flex", gap: "0.75rem", alignItems: "flex-start",
+                display: "flex", gap: "0.65rem", alignItems: "flex-start",
                 background: c.bg,
                 border: `1px solid ${c.border}`,
                 borderLeft: `3px solid ${c.accent}`,
                 borderRadius: "0 10px 10px 0",
-                padding: "0.65rem 1rem",
+                padding: "0.6rem 0.9rem",
+                minWidth: 0,
               }}>
                 <div style={{
-                  flexShrink: 0, width: 22, height: 22, borderRadius: "50%",
-                  background: c.accent, color: "#fff",
+                  flexShrink: 0, width: 20, height: 20, borderRadius: "50%",
+                  background: c.accent, color: "#0d0918",
                   display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: "0.65rem", fontWeight: 700,
+                  fontSize: "0.62rem", fontWeight: 700,
+                  marginTop: 2,
                 }}>{i + 1}</div>
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: "0.88rem", color: "var(--ts-text)" }}>{label}</div>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontWeight: 700, fontSize: "0.88rem", color: "var(--ts-text)", wordWrap: "break-word" }}>{label}</div>
                   {item.description && <div className="vr-tree-desc">{item.description}</div>}
                 </div>
               </div>
@@ -309,42 +385,40 @@ function HierarchyVisual({ title, block }: { title: string; block: string }) {
 /* ══ COMPARISON ══ */
 function ComparisonVisual({ title, block }: { title: string; block: string }) {
   const items = splitTopLevel(dataBody(block)).map(parseItem);
+  const colClass = items.length >= 2 ? "vr-compare-grid vr-compare-grid-2" : "vr-compare-grid";
   return (
     <div className="vr-root">
       {title && <h3 className="vr-title">{title}</h3>}
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: `repeat(${Math.min(items.length, 2)}, 1fr)`,
-        gap: "0.9rem",
-      }}>
+      <div className={colClass}>
         {items.map((item, i) => {
-          const c      = COMPARE_COLORS[i % COMPARE_COLORS.length];
-          const label  = bestLabel(item);
-          const feats  = item.features.length ? item.features : subList(item.raw, "features");
+          const c       = COMPARE_COLORS[i % COMPARE_COLORS.length];
+          const label   = bestLabel(item);
+          const feats   = item.features.length ? item.features : subList(item.raw, "features");
           const example = item.visual_example;
           return (
             <div key={i} style={{
               background: "var(--ts-surface-hi)",
               border: `1px solid ${c.border}`,
               borderRadius: 14,
-              padding: "1.1rem 1.2rem",
+              padding: "1rem 1rem",
               position: "relative", overflow: "hidden",
+              minWidth: 0,
             }}>
               {/* top accent stripe */}
               <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: c.accent }} />
               {/* letter badge */}
               <div style={{
                 display: "inline-flex", alignItems: "center", justifyContent: "center",
-                width: 22, height: 22, borderRadius: "50%",
+                width: 20, height: 20, borderRadius: "50%",
                 background: c.accent, color: "#0d0918",
-                fontSize: "0.65rem", fontWeight: 800, marginBottom: "0.55rem",
+                fontSize: "0.62rem", fontWeight: 800, marginBottom: "0.5rem",
               }}>{String.fromCharCode(65 + i)}</div>
               {/* label */}
-              <div style={{ fontWeight: 700, color: c.accent, fontSize: "0.92rem", lineHeight: 1.3, marginBottom: "0.55rem" }}>
+              <div style={{ fontWeight: 700, color: c.accent, fontSize: "0.9rem", lineHeight: 1.3, marginBottom: "0.5rem", wordWrap: "break-word" }}>
                 {label}
               </div>
               {feats.length > 0 && (
-                <ul style={{ margin: 0, paddingLeft: "1.1rem", marginBottom: example ? "0.65rem" : 0 }}>
+                <ul style={{ margin: 0, paddingLeft: "1rem", marginBottom: example ? "0.6rem" : 0 }}>
                   {feats.map((f, fi) => (
                     <li key={fi} className="vr-compare-feat">{f}</li>
                   ))}
@@ -352,11 +426,11 @@ function ComparisonVisual({ title, block }: { title: string; block: string }) {
               )}
               {example && (
                 <div style={{
-                  marginTop: "0.6rem",
+                  marginTop: "0.55rem",
                   background: "var(--ts-surface)",
                   border: `1px solid ${c.border}`,
                   borderRadius: 8,
-                  padding: "0.45rem 0.75rem",
+                  padding: "0.4rem 0.7rem",
                   fontFamily: "'JetBrains Mono','Fira Code',monospace",
                   fontSize: "0.74rem", color: c.accent, wordBreak: "break-all",
                 }}>{example}</div>
@@ -375,39 +449,39 @@ function CycleVisual({ title, block }: { title: string; block: string }) {
   return (
     <div className="vr-root">
       {title && <h3 className="vr-title">{title}</h3>}
-      {/* pill row */}
-      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.35rem", marginBottom: "1.25rem" }}>
+      {/* pill row — wraps on mobile */}
+      <div className="vr-cycle-pills">
         {items.map((item, i) => {
           const label = bestLabel(item);
           const color = CYCLE_COLORS[i % CYCLE_COLORS.length];
           return (
             <div key={i} style={{ display: "contents" }}>
               <div style={{
-                display: "flex", alignItems: "center", gap: "0.4rem",
+                display: "flex", alignItems: "center", gap: "0.35rem",
                 background: "var(--ts-surface-hi)",
                 border: `1px solid ${color}`,
                 borderRadius: 999,
-                padding: "0.4rem 0.85rem",
+                padding: "0.35rem 0.75rem",
               }}>
                 <div style={{
-                  width: 20, height: 20, borderRadius: "50%",
+                  width: 18, height: 18, borderRadius: "50%",
                   background: color, color: "#0d0918",
                   display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: "0.63rem", fontWeight: 700, flexShrink: 0,
+                  fontSize: "0.6rem", fontWeight: 700, flexShrink: 0,
                 }}>{i + 1}</div>
-                <span style={{ fontSize: "0.82rem", fontWeight: 600, color, whiteSpace: "nowrap" }}>{label}</span>
+                <span style={{ fontSize: "0.8rem", fontWeight: 600, color, whiteSpace: "nowrap" }}>{label}</span>
               </div>
               {i < items.length - 1 && (
-                <span style={{ color: "var(--ts-text-dim)", fontSize: "0.88rem" }}>→</span>
+                <span style={{ color: "var(--ts-text-dim)", fontSize: "0.85rem" }}>→</span>
               )}
             </div>
           );
         })}
-        <span style={{ color: "var(--ts-text-dim)", fontSize: "0.88rem", marginLeft: "0.1rem" }}>↩</span>
+        <span style={{ color: "var(--ts-text-dim)", fontSize: "0.85rem" }}>↩</span>
       </div>
       {/* detail rows */}
       {items.some(it => it.description || it.application) && (
-        <div style={{ display: "flex", flexDirection: "column", gap: "0.45rem" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
           {items.map((item, i) => {
             const label = bestLabel(item);
             const desc  = item.description || item.application;
@@ -415,21 +489,23 @@ function CycleVisual({ title, block }: { title: string; block: string }) {
             if (!desc) return null;
             return (
               <div key={i} style={{
-                display: "flex", gap: "0.7rem", alignItems: "flex-start",
+                display: "flex", gap: "0.65rem", alignItems: "flex-start",
                 background: "var(--ts-surface)",
-                border: `1px solid var(--ts-border)`,
+                border: "1px solid var(--ts-border)",
                 borderLeft: `3px solid ${color}`,
                 borderRadius: "0 10px 10px 0",
-                padding: "0.6rem 1rem",
+                padding: "0.55rem 0.9rem",
+                minWidth: 0,
               }}>
                 <div style={{
-                  flexShrink: 0, width: 20, height: 20, borderRadius: "50%",
+                  flexShrink: 0, width: 18, height: 18, borderRadius: "50%",
                   background: color, color: "#0d0918",
                   display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: "0.63rem", fontWeight: 700,
+                  fontSize: "0.6rem", fontWeight: 700,
+                  marginTop: 2,
                 }}>{i + 1}</div>
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: "0.85rem", color, marginBottom: "0.12rem" }}>{label}</div>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontWeight: 700, fontSize: "0.85rem", color, marginBottom: "0.1rem", wordWrap: "break-word" }}>{label}</div>
                   <div className="vr-cycle-desc">{desc}</div>
                 </div>
               </div>
@@ -456,10 +532,12 @@ export default function VisualRenderer({ block }: VisualProps) {
     background: "var(--ts-surface)",
     border: "1px solid var(--ts-border)",
     borderRadius: 14,
-    padding: "1.4rem 1.6rem",
+    padding: "1.2rem 1.2rem",
     marginTop: "0.25rem",
     boxShadow: "0 2px 18px rgba(0,0,0,0.15)",
     overflow: "hidden",
+    width: "100%",
+    boxSizing: "border-box" as const,
     ...(WRAP_STYLES[type] ?? {}),
   };
 

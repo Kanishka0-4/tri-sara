@@ -37,17 +37,14 @@ export default function AudioRenderer({ block, variant = "default" }: AudioRende
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const [isMobile, setIsMobile] = useState(false);
-
-useEffect(() => {
-  const check = () => {
-    if (typeof window !== "undefined") {
-      setIsMobile(window.innerWidth < 768);
-    }
-  };
-  check();
-  window.addEventListener("resize", check);
-  return () => window.removeEventListener("resize", check);
-}, []);
+  useEffect(() => {
+    const check = () => {
+      if (typeof window !== "undefined") setIsMobile(window.innerWidth < 640);
+    };
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
 
   useEffect(() => {
     setSupported(typeof window !== "undefined" && "speechSynthesis" in window);
@@ -130,93 +127,89 @@ useEffect(() => {
     <div style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
       <div style={{
         display: "flex",
-        gap: "0.8rem",
-        padding: "0.7rem 1rem",
-        flexDirection: isMobile ? "column" : "row",
-        alignItems: isMobile ? "flex-start" : "center",
+        flexDirection: "column",
+        gap: "0.65rem",
+        padding: "0.85rem 1rem",
         background: playing ? "var(--ts-green-soft)"  : "var(--ts-surface-hi)",
         border:    `1px solid ${playing ? "var(--ts-green-border)" : "var(--ts-border-hi)"}`,
         borderRadius: 12,
         transition: "background 0.2s, border-color 0.2s",
       }}>
-
-        {/* Play / Pause button */}
-        <button
-          onClick={handlePlay}
-          aria-label={playing ? "Pause" : "Play"}
-          style={{
-            width: 38, height: 38, borderRadius: "50%", flexShrink: 0,
-            background: playing
-              ? "linear-gradient(135deg, var(--ts-green), #34d399)"
-              : "linear-gradient(135deg, var(--ts-violet), #818cf8)",
-            border: "none", cursor: "pointer",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            color: "#0d0918", fontSize: "0.85rem",
-            boxShadow: playing
-              ? "0 0 14px var(--ts-green-soft)"
-              : "0 0 14px var(--ts-violet-glow)",
-            transition: "background 0.2s, box-shadow 0.2s",
-          }}
-        >
-          {playing ? "⏸" : "▶"}
-        </button>
-
-        {/* Label + progress bar */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{
-            fontSize: "0.72rem",
-            fontWeight: 600,
-            marginBottom: "0.32rem",
-            color: playing ? "var(--ts-green)" : "var(--ts-violet)",
-            letterSpacing: "0.03em",
-            transition: "color 0.2s",
-          }}>
-            <p
-              style={{
-                writingMode: "horizontal-tb",
-                whiteSpace: "normal",
-                wordBreak: "break-word",
-                width: "100%",
-              }}
-            >
-              {labelText}
-            </p>
-          </div>
-          <div style={{
-            height: 3,
-            background: "var(--ts-border)",
-            borderRadius: 99,
-            overflow: "hidden",
-          }}>
-            <div style={{
-              height: "100%",
+        {/* Top row: play button + label + progress */}
+        <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
+          {/* Play / Pause button */}
+          <button
+            onClick={handlePlay}
+            aria-label={playing ? "Pause" : "Play"}
+            style={{
+              width: 36, height: 36, borderRadius: "50%", flexShrink: 0,
               background: playing
-                ? "linear-gradient(90deg, var(--ts-green), #34d399)"
-                : "linear-gradient(90deg, var(--ts-violet), #818cf8)",
-              width: `${progress}%`,
-              transition: "width 0.2s linear, background 0.2s",
+                ? "linear-gradient(135deg, var(--ts-green), #34d399)"
+                : "linear-gradient(135deg, var(--ts-violet), #818cf8)",
+              border: "none", cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              color: "#0d0918", fontSize: "0.82rem",
+              boxShadow: playing
+                ? "0 0 12px var(--ts-green-soft)"
+                : "0 0 12px var(--ts-violet-glow)",
+              transition: "background 0.2s, box-shadow 0.2s",
+            }}
+          >
+            {playing ? "⏸" : "▶"}
+          </button>
+
+          {/* Label + progress bar */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{
+              fontSize: "0.72rem",
+              fontWeight: 600,
+              marginBottom: "0.3rem",
+              color: playing ? "var(--ts-green)" : "var(--ts-violet)",
+              letterSpacing: "0.03em",
+              transition: "color 0.2s",
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}>
+              {labelText}
+            </div>
+            <div style={{
+              height: 3,
+              background: "var(--ts-border)",
               borderRadius: 99,
-            }} />
+              overflow: "hidden",
+            }}>
+              <div style={{
+                height: "100%",
+                background: playing
+                  ? "linear-gradient(90deg, var(--ts-green), #34d399)"
+                  : "linear-gradient(90deg, var(--ts-violet), #818cf8)",
+                width: `${progress}%`,
+                transition: "width 0.2s linear, background 0.2s",
+                borderRadius: 99,
+              }} />
+            </div>
           </div>
         </div>
 
-        {/* Speed controls */}
-        <div style={{ display: "flex", gap: "0.22rem", flexShrink: 0 }}>
+        {/* Speed controls row — always horizontal, wraps if needed */}
+        <div style={{ display: "flex", gap: "0.2rem", flexWrap: "wrap" }}>
           {SPEEDS.map(s => (
             <button
               key={s.value}
               onClick={() => handleSpeedChange(s.value)}
               style={{
-                padding: "0.22rem 0.44rem",
+                padding: "0.25rem 0.5rem",
                 borderRadius: 6,
                 border: `1px solid ${speed === s.value ? "var(--ts-violet)" : "var(--ts-border)"}`,
                 background: speed === s.value ? "var(--ts-violet)" : "transparent",
                 color: speed === s.value ? "#0d0918" : "var(--ts-text-muted)",
-                fontSize: "0.63rem",
+                fontSize: "0.65rem",
                 fontWeight: speed === s.value ? 700 : 400,
                 cursor: "pointer",
                 fontFamily: "'Space Grotesk', sans-serif",
                 transition: "background 0.15s, color 0.15s, border-color 0.15s",
+                flexShrink: 0,
               }}
             >
               {s.label}
