@@ -1,0 +1,84 @@
+@import "tailwindcss";
+
+/* ───────── DEFAULT (DARK THEME) ───────── */
+:root {
+  --ts-bg: radial-gradient(circle at 30% 40%, #140a2e, #07040f 60%);
+  --ts-bg-secondary: radial-gradient(circle at 70% 60%, #1a0f3d, #0d0918);
+  --ts-surface: rgba(255,255,255,0.04);
+  --ts-surface-hi: rgba(255,255,255,0.07);
+  --ts-border: rgba(255,255,255,0.09);
+  --ts-border-hi: rgba(160,120,255,0.35);
+
+  --ts-text: #f1f0ff;
+  --ts-text-muted: rgba(241,240,255,0.55);
+  --ts-text-dim: rgba(241,240,255,0.28);
+
+  --ts-violet: #a78bfa;
+  --ts-violet-glow: rgba(167,139,250,0.18);
+  --ts-violet-bubble: rgba(167,139,250,0.12);
+  --ts-violet-soft: rgba(167,139,250,0.08);
+
+  --ts-cyan: #22d3ee;
+  --ts-cyan-glow: rgba(34,211,238,0.15);
+
+  --ts-green: #34d399;
+  --ts-green-soft: rgba(52,211,153,0.10);
+  --ts-green-border: rgba(52,211,153,0.25);
+
+  --ts-rose: #fb7185;
+  --ts-rose-soft: rgba(251,113,133,0.10);
+  --ts-rose-border: rgba(251,113,133,0.25);
+
+  --ts-amber: #fbbf24;
+  --ts-amber-soft: rgba(251,191,36,0.10);
+  --ts-amber-border: rgba(251,191,36,0.25);
+}
+
+/* ───────── LIGHT THEME (ONLY WHEN TOGGLED) ───────── */
+html[data-theme="light"] {
+  --ts-bg: #f8f7ff;
+  --ts-bg-secondary: #ffffff;
+  --ts-surface: rgba(167,139,250,0.06);
+  --ts-surface-hi: rgba(167,139,250,0.10);
+  --ts-border: rgba(100,80,200,0.12);
+  --ts-border-hi: rgba(100,80,200,0.35);
+
+  --ts-text: #1a1030;
+  --ts-text-muted: rgba(26,16,48,0.60);
+  --ts-text-dim: rgba(26,16,48,0.35);
+
+  --ts-violet: #7c3aed;
+  --ts-violet-glow: rgba(124,58,237,0.12);
+  --ts-violet-bubble: rgba(124,58,237,0.08);
+  --ts-violet-soft: rgba(124,58,237,0.05);
+
+  --ts-cyan: #0891b2;
+  --ts-cyan-glow: rgba(8,145,178,0.10);
+
+  --ts-green: #059669;
+  --ts-green-soft: rgba(5,150,105,0.08);
+  --ts-green-border: rgba(5,150,105,0.20);
+
+  --ts-rose: #e11d48;
+  --ts-rose-soft: rgba(225,29,72,0.07);
+  --ts-rose-border: rgba(225,29,72,0.20);
+
+  --ts-amber: #d97706;
+  --ts-amber-soft: rgba(217,119,6,0.08);
+  --ts-amber-border: rgba(217,119,6,0.20);
+}
+
+/* ───────── BASE STYLES ───────── */
+body {
+  background: var(--ts-bg);
+  color: var(--ts-text);
+  font-family: 'Space Grotesk', sans-serif;
+}
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+#__next {
+  height: 100%;
+}
