@@ -36,6 +36,19 @@ export default function AudioRenderer({ block, variant = "default" }: AudioRende
   const speedRef    = useRef(1.0);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
+  const [isMobile, setIsMobile] = useState(false);
+
+useEffect(() => {
+  const check = () => {
+    if (typeof window !== "undefined") {
+      setIsMobile(window.innerWidth < 768);
+    }
+  };
+  check();
+  window.addEventListener("resize", check);
+  return () => window.removeEventListener("resize", check);
+}, []);
+
   useEffect(() => {
     setSupported(typeof window !== "undefined" && "speechSynthesis" in window);
     return () => {
@@ -117,9 +130,10 @@ export default function AudioRenderer({ block, variant = "default" }: AudioRende
     <div style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
       <div style={{
         display: "flex",
-        alignItems: "center",
         gap: "0.8rem",
         padding: "0.7rem 1rem",
+        flexDirection: isMobile ? "column" : "row",
+        alignItems: isMobile ? "flex-start" : "center",
         background: playing ? "var(--ts-green-soft)"  : "var(--ts-surface-hi)",
         border:    `1px solid ${playing ? "var(--ts-green-border)" : "var(--ts-border-hi)"}`,
         borderRadius: 12,
@@ -157,7 +171,16 @@ export default function AudioRenderer({ block, variant = "default" }: AudioRende
             letterSpacing: "0.03em",
             transition: "color 0.2s",
           }}>
-            {labelText}
+            <p
+              style={{
+                writingMode: "horizontal-tb",
+                whiteSpace: "normal",
+                wordBreak: "break-word",
+                width: "100%",
+              }}
+            >
+              {labelText}
+            </p>
           </div>
           <div style={{
             height: 3,
