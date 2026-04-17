@@ -95,7 +95,8 @@ function LeftPanel() {
           {/* HERO */}
           <h1
             style={{
-              fontSize: "3.2rem",
+              fontSize: isMobile ? "2rem" : "3.2rem",
+              lineHeight: isMobile ? 1.3 : 1.25,
               fontWeight: 700,
               color: C.text,
               lineHeight: 1.25,
@@ -108,6 +109,7 @@ function LeftPanel() {
                 background: `linear-gradient(90deg, ${C.violet}, ${C.cyan})`,
                 WebkitBackgroundClip: "text",
                 WebkitTextFillColor: "transparent",
+                marginBottom: isMobile ? "1rem" : "1.5rem",
               }}
             >
               brain actually works.
@@ -115,12 +117,14 @@ function LeftPanel() {
           </h1>
 
           <p style={{ 
-  fontSize: 17, 
-  color: C.muted, 
-  marginBottom: "1.5rem", 
-  maxWidth: 600,          
-  lineHeight: 1.6         
-}}>
+              fontSize: 17, 
+              color: C.muted, 
+             marginBottom: isMobile ? "1rem" : "1.5rem", 
+              maxWidth: isMobile ? "100%" : 600,
+            fontSize: isMobile ? 14.5 : 17,
+            lineHeight: 1.6,          
+              lineHeight: 1.6         
+            }}>
             Not everyone learns the same. We figure out your style — even if you
             don’t know it yet — and build a system just for you.
           </p>
