@@ -577,7 +577,7 @@ function ItemView({
 }
 
 /* ─── Main page ───────────────────────────────────────────── */
-export default function QuizTakePage() {
+function QuizTakePageContent() {
   const [theme, setTheme] = useState<"dark" | "light">("dark");
 
 const toggleTheme = () => {
@@ -848,5 +848,14 @@ useEffect(() => {
 
       </div>
     </>
+  );
+}
+import { Suspense } from "react";
+
+export default function QuizTakePage() {
+  return (
+    <Suspense fallback={<div style={{ padding: 40 }}>Loading...</div>}>
+      <QuizTakePageContent />
+    </Suspense>
   );
 }
