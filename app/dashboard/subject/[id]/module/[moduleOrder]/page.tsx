@@ -234,6 +234,7 @@ export default function ModulePage() {
       });
       if (res.status === 401) { router.push("/login"); return; }
       const data = await res.json();
+      console.log("moduleQuiz POST response:", data);
       setModuleQuiz(data.mcqs || []);
       setModuleQuizAnswers({});
     } catch (err) { console.error("Module quiz fetch failed", err); }
@@ -267,7 +268,8 @@ export default function ModulePage() {
     try {
       const res  = await fetch(`/api/moduleReady?subjectId=${subjectId}&moduleOrder=${nextOrder}`);
       const data = await res.json();
-      if (data.isLast)  { alert("This was the last module!"); return; }
+      if (data.isLast)  { router.push(`/dashboard/subject/${subjectId}/mega`); // ← was alert(), now navigates
+      return;}
       if (data.ready)   { router.push(`/dashboard/subject/${subjectId}/module/${nextOrder}`); return; }
       setGeneratingNext(true);
       const genRes = await fetch("/api/ai/generateModule", {
@@ -312,6 +314,7 @@ export default function ModulePage() {
         handleNextModule={handleNextModule}
         moduleOrder={moduleOrder}
         onBack={() => setShowModuleQuiz(false)}
+        isLastModule={nextModuleIsLast}
       />
     );
   }

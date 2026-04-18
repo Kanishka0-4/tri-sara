@@ -1,6 +1,6 @@
 "use client";
 import { useParams } from 'next/navigation';
-import QuizPage from '@/components/megaQuiz/QuizPage';
+import QuizPage from '@/app/components/megaQuiz/QuizPage';
 
 export default function MegaQuizPage() {
   const params = useParams();
