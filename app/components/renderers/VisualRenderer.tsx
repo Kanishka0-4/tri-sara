@@ -158,15 +158,19 @@ function subList(raw: string, key: string): string[] {
   }
   return result;
 }
+const KEY_PREFIX_RX = /^\s*(?:concept|step|name|application|description|visual_example|features|data|type|title)\s*:\s*/i;
+function stripKeyPrefix(s: string): string { return s.replace(KEY_PREFIX_RX, "").trim(); }
+
 function parseItem(raw: string) {
-  const header = raw.split("\n")[0].replace(/^-\s*/, "").trim();
+  const rawHeader = raw.split("\n")[0].replace(/^-\s*/, "").trim();
+  const header = stripKeyPrefix(rawHeader);
   return {
     raw,
     header,
-    name:           scalar(raw, "name")        || header,
+    name:           stripKeyPrefix(scalar(raw, "name")    || header),
     description:    scalar(raw, "description"),
-    concept:        scalar(raw, "concept")      || header,
-    step:           scalar(raw, "step")         || header,
+    concept:        stripKeyPrefix(scalar(raw, "concept") || header),
+    step:           stripKeyPrefix(scalar(raw, "step")    || header),
     application:    scalar(raw, "application"),
     visual_example: scalar(raw, "visual_example"),
     features:       subList(raw, "features"),
@@ -192,7 +196,7 @@ function parseTree(block: string): TreeNode[] {
       const indent = line.search(/\S/);
       if (indent < minIndent) break;
       if (line.trim().startsWith("- name:")) {
-        const name = line.trim().replace(/^- name:\s*/, "");
+        const name = stripKeyPrefix(line.trim().replace(/^-\s*/, ""));
         let description = "";
         let j = i + 1;
         while (j < lines.length) {

@@ -22,18 +22,15 @@ function getRanking(p: LearningProfile) {
 }
 
 /* ─── Aggressive tag-leak killer ─────────────────────────────── */
+// Structural/scaffolding section headings that should never be shown to users
+const STRUCTURAL_HEADINGS_RX = /^#{1,4}\s*(Analogy|Real.?World\s+(?:Application|Example)|Key\s+Takeaways?|Summary|Introduction|Overview|Example|Definition|Explanation|Application|Concept|Context|Background|Conclusion)\s*$/gim;
+
 function normaliseContent(src: string): string {
   return src
     // Fix newline-broken closing tags  [\n/TEXT] → [/TEXT]
     .replace(/\[\s*\n\s*\/(TEXT|VISUAL|AUDIO)\]/gi, "[/$1]")
-    // Bare tag word on its own line  "TEXT\n" or "VISUAL\n"
-    .replace(/^(TEXT|VISUAL|AUDIO)\s*$/gim, "")
-    // Bare tag word as inline prefix  "TEXT Some content…"
-    .replace(/^(TEXT|VISUAL|AUDIO)\s+/gim, "")
-    // Bare tag word anywhere inline (not inside brackets)
-    .replace(/(?<!\[)\b(TEXT|VISUAL|AUDIO)\b(?!\])/gi, "")
-    // Orphan unclosed opening tag  [TEXT] with no matching [/TEXT]
-    .replace(/\[\s*(TEXT|VISUAL|AUDIO)\s*\](?![\s\S]*?\[\/\s*\1\s*\])/gi, "")
+    // Strip structural scaffolding headings (Analogy, Real World Application, etc.)
+    .replace(STRUCTURAL_HEADINGS_RX, "")
     // Strip quiz scaffolding
     .replace(/#{1,3}\s*(Quiz|Questions?|Multiple Choice|MCQ).*\n?/gi, "")
     .replace(/\d+\.\s*.*\?\s*\n?(A\)|B\)|C\)|D\)).*\n?/gi, "")
@@ -42,6 +39,15 @@ function normaliseContent(src: string): string {
     .replace(/Answer\s*:\s*[A-D]\s*\n?/gi, "")
     // Bullets
     .replace(/^\*\s+/gm, "- ");
+}
+
+// Called only on extracted text/gap chunks AFTER tag parsing — never on full source
+function cleanTextChunk(s: string): string {
+  return s
+    .replace(/\[\s*\/\s*(TEXT|VISUAL|AUDIO)\s*\]/gi, "")  // orphan closers
+    .replace(/\[\s*(TEXT|VISUAL|AUDIO)\s*\]/gi, "")         // orphan openers
+    .replace(/^(TEXT|VISUAL|AUDIO)\s*$/gim, "")             // bare tag word on own line
+    .trim();
 }
 
 function stripKeyTakeaways(block: string): string {
@@ -54,24 +60,21 @@ function parseTaggedParts(src: string) {
   const tagRx = /\[\s*(TEXT|VISUAL|AUDIO)\s*\]([\s\S]*?)\[\s*\/\s*\1\s*\]/gi;
   let last = 0, m: RegExpExecArray | null;
 
-  // Strip residual bare tag prefixes from any extracted chunk
-  const clean = (s: string) => s.replace(/^(TEXT|VISUAL|AUDIO)\s*/gim, "").trim();
-
   while ((m = tagRx.exec(src)) !== null) {
     if (m.index > last) {
-      const plain = clean(src.slice(last, m.index));
+      const plain = cleanTextChunk(src.slice(last, m.index));
       if (plain) parts.push({ type: "text", content: plain });
     }
     const t = m[1].toLowerCase() as "visual" | "audio" | "text";
-    const c = clean(m[2]);
+    const c = m[2].trim(); // keep visual/audio content intact
     if (c) parts.push({ type: t, content: c });
     last = tagRx.lastIndex;
   }
   if (last < src.length) {
-    const rest = clean(src.slice(last));
+    const rest = cleanTextChunk(src.slice(last));
     if (rest) parts.push({ type: "text", content: rest });
   }
-  if (!parts.length && src.trim()) parts.push({ type: "text", content: clean(src) });
+  if (!parts.length && src.trim()) parts.push({ type: "text", content: cleanTextChunk(src) });
   return parts;
 }
 
@@ -190,43 +193,14 @@ export default function MarkdownRenderer({
         }
 
         /*
-         * VISUAL BLOCK — glassy card, clearly distinct from text.
+         * VISUAL BLOCK — plain wrapper, vr-wrap handles all the styling.
          */
         .md-visual-block {
           position: relative;
-          border-radius: 16px;
-          padding: 1.5rem;
           margin-bottom: 1.75rem;
-          overflow: hidden;
-          background: var(--ts-surface-hi);
-          border: 1px solid var(--ts-border-hi);
-          box-shadow:
-            0 0 0 1px var(--ts-border-hi),
-            0 8px 32px var(--ts-violet-glow),
-            inset 0 0 48px var(--ts-violet-soft);
-          transition: box-shadow 0.25s, border-color 0.25s;
-        }
-        /* diagonal tint */
-        .md-visual-block::before {
-          content: '';
-          position: absolute; inset: 0;
-          background: linear-gradient(135deg, var(--ts-violet-soft) 0%, transparent 55%, var(--ts-cyan-glow) 100%);
-          pointer-events: none; border-radius: inherit; opacity: 0.55;
-        }
-        /* top shimmer line */
-        .md-visual-block::after {
-          content: '';
-          position: absolute;
-          top: 0; left: 15%; width: 70%; height: 1px;
-          background: linear-gradient(90deg, transparent, var(--ts-violet), var(--ts-cyan), transparent);
-          opacity: 0.65;
-        }
-        .md-visual-block:hover {
-          border-color: var(--ts-violet);
-          box-shadow: 0 0 0 1px var(--ts-violet), 0 12px 40px var(--ts-violet-glow), inset 0 0 60px var(--ts-violet-bubble);
         }
         @media (max-width:640px) {
-          .md-visual-block { padding: 1.1rem 1rem; border-radius: 12px; margin-bottom: 1.25rem; }
+          .md-visual-block { margin-bottom: 1.25rem; }
         }
 
         /* "Visual" badge inside visual block */
@@ -336,26 +310,29 @@ export default function MarkdownRenderer({
         {taggedParts.map((part, i) => {
           const delay = Math.min(i * 55, 280);
 
-          if (part.type === "visual") return (
+          if (part.type === "visual") {
+            if (!part.content?.trim()) return null;
+            return (
             <FadeIn key={i} delay={delay}>
               <div className="md-visual-block">
-                <div className="md-visual-label">Visual</div>
                 <div style={{ position: "relative", zIndex: 1 }}>
                   <AdaptiveRenderer block={part.content} type="visual"
                     profile={profile} moduleId={moduleId} subjectId={subjectId} />
                 </div>
               </div>
             </FadeIn>
-          );
+          );}
 
-          if (part.type === "audio") return (
+          if (part.type === "audio") {
+            if (!part.content?.trim()) return null;
+            return (
             <FadeIn key={i} delay={delay}>
               <div className="md-audio-block">
                 <AdaptiveRenderer block={part.content} type="audio"
                   profile={profile} moduleId={moduleId} subjectId={subjectId} />
               </div>
             </FadeIn>
-          );
+          );}
 
           if (!part.content.trim()) return null;
 
