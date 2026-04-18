@@ -279,7 +279,10 @@ Each chapter MUST include:
 • one bullet list at the end  
 
 Format:
-### Key Takeaways
+### analogy  
+### real-world application  
+### example   
+### Key Takeaways / Bullet Points
 • The bullet points must be brief, important points from the chapter. It should not exceed 5 points. It should not be a summary of the chapter, but rather the most critical insights or concepts that the learner should remember.
 --------------------------------------------------
 

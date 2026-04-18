@@ -826,22 +826,7 @@ export default function RoadmapGeneratorPage() {
                         {preQuizSubmitted ? "✓ Pre-quiz done" : "📝 Take Pre-Quiz"}
                       </motion.button>
 
-                      {/* Secondary: skip to dashboard */}
-                      <motion.button
-                        onClick={() => router.push("/dashboard")}
-                        whileHover={{scale:1.03}}
-                        whileTap={{scale:0.97}}
-                        style={{
-                          padding:"12px 22px",
-                          background:"transparent",
-                          border:`1.5px solid ${C.border}`,
-                          borderRadius:12, color:C.muted,
-                          fontSize:14, fontWeight:600, cursor:"pointer",
-                          fontFamily:"'Space Grotesk',sans-serif",
-                        }}
-                      >
-                        Skip → Dashboard
-                      </motion.button>
+                      
                     </div>
                   </motion.div>
                 )}

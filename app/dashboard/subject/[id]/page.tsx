@@ -392,6 +392,10 @@ export default function SubjectLandingPage() {
   const [megaEligible,    setMegaEligible   ] = useState(false);
   const [megaAlreadyDone, setMegaAlreadyDone] = useState(false);
 
+const [preQuizDone, setPreQuizDone] = useState<boolean | null>(null);
+const [preQuizLoading, setPreQuizLoading] = useState(true);
+
+
   useEffect(() => {
     const saved = localStorage.getItem("trisara-theme");
     if (saved) {
@@ -464,6 +468,7 @@ export default function SubjectLandingPage() {
       </div>
     );
   }
+  
 
   const showMegaBanner = megaEligible && !megaAlreadyDone;
 
