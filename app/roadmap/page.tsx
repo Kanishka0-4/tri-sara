@@ -94,9 +94,11 @@ const PreQuizForm: React.FC<{ onSubmit: () => void; questions: PreQuizQuestion[]
     setScore(correct);
     setSubmitted(true);
 
-    const responses = questions.map((q, i) => ({
+    const responses = questions
+    .filter(q => q.question_id > 0)
+    .map((q, i) => ({
       question_id: q.question_id,
-      selected_option: finalAnswers[i],
+      selected_option: finalAnswers[questions.indexOf(q)],
     }));
 
     try {
@@ -435,9 +437,15 @@ export default function RoadmapGeneratorPage() {
         });
         const aiData = await aiRes.json();
         if (aiData.quiz && Array.isArray(aiData.quiz)) {
-          setPreQuizQuestions(aiData.quiz.map((q: any) => ({
-            q: q.question, options: q.options, correct: q.correct, question_id: q.question_id || 0,
-          })));
+         const mapped = aiData.quiz
+        .filter((q: any) => typeof q.question_id === 'number' && q.question_id > 0)
+        .map((q: any) => ({
+          q: q.question,
+          options: q.options,
+          correct: q.correct,
+          question_id: q.question_id,
+        }));
+      setPreQuizQuestions(mapped);
         }
       } catch {}
 

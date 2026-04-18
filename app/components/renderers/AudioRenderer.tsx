@@ -30,24 +30,21 @@ const SPEEDS = [
 
 export default function AudioRenderer({ block, variant = "default" }: AudioRendererProps) {
   const [playing,   setPlaying  ] = useState(false);
-  const [supported, setSupported] = useState(false);
   const [progress,  setProgress ] = useState(0);
   const [speed,     setSpeed    ] = useState(1.0);
+
+  // KEY FIX: default true so component renders on first pass.
+  // Previously false caused `if (!supported) return null` to fire before
+  // the useEffect ran, permanently hiding the audio player.
+  const [supported, setSupported] = useState(true);
+
   const speedRef    = useRef(1.0);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
-    const check = () => {
-      if (typeof window !== "undefined") setIsMobile(window.innerWidth < 640);
-    };
-    check();
-    window.addEventListener("resize", check);
-    return () => window.removeEventListener("resize", check);
-  }, []);
-
-  useEffect(() => {
-    setSupported(typeof window !== "undefined" && "speechSynthesis" in window);
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) {
+      setSupported(false);
+    }
     return () => {
       window.speechSynthesis?.cancel();
       if (intervalRef.current) clearInterval(intervalRef.current);
@@ -63,37 +60,51 @@ export default function AudioRenderer({ block, variant = "default" }: AudioRende
 
   const speak = (rate: number) => {
     const text = toSpeakableText(block);
+    if (!text) return;
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.rate  = rate;
     utterance.pitch = 1;
-    const voices    = window.speechSynthesis.getVoices();
-    const preferred =
-      voices.find(v => v.lang === "en-US" && v.localService) ??
-      voices.find(v => v.lang.startsWith("en"));
-    if (preferred) utterance.voice = preferred;
 
-    utterance.onstart = () => {
-      setPlaying(true);
-      setProgress(0);
-      let elapsed = 0;
-      const estimated = (text.length * 55) / rate;
-      intervalRef.current = setInterval(() => {
-        elapsed += 200;
-        setProgress(Math.min((elapsed / estimated) * 100, 95));
-      }, 200);
+    const trySpeak = () => {
+      const voices = window.speechSynthesis.getVoices();
+      const preferred =
+        voices.find(v => v.lang === "en-US" && v.localService) ??
+        voices.find(v => v.lang.startsWith("en"));
+      if (preferred) utterance.voice = preferred;
+
+      utterance.onstart = () => {
+        setPlaying(true);
+        setProgress(0);
+        let elapsed = 0;
+        const estimated = (text.length * 55) / rate;
+        intervalRef.current = setInterval(() => {
+          elapsed += 200;
+          setProgress(Math.min((elapsed / estimated) * 100, 95));
+        }, 200);
+      };
+      utterance.onend = () => {
+        setPlaying(false);
+        setProgress(100);
+        if (intervalRef.current) clearInterval(intervalRef.current);
+        setTimeout(() => setProgress(0), 800);
+      };
+      utterance.onerror = () => {
+        setPlaying(false);
+        setProgress(0);
+        if (intervalRef.current) clearInterval(intervalRef.current);
+      };
+      window.speechSynthesis.speak(utterance);
     };
-    utterance.onend = () => {
-      setPlaying(false);
-      setProgress(100);
-      if (intervalRef.current) clearInterval(intervalRef.current);
-      setTimeout(() => setProgress(0), 800);
-    };
-    utterance.onerror = () => {
-      setPlaying(false);
-      setProgress(0);
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-    window.speechSynthesis.speak(utterance);
+
+    const voices = window.speechSynthesis.getVoices();
+    if (voices.length === 0) {
+      window.speechSynthesis.onvoiceschanged = () => {
+        window.speechSynthesis.onvoiceschanged = null;
+        trySpeak();
+      };
+    } else {
+      trySpeak();
+    }
   };
 
   const handleSpeedChange = (val: number) => {
@@ -120,65 +131,42 @@ export default function AudioRenderer({ block, variant = "default" }: AudioRende
   if (!supported) return null;
 
   const labelText = variant === "chapter"
-    ? (playing ? "Reading chapter…"  : "Listen to this chapter")
-    : (playing ? "Reading aloud…"    : "Listen to this section");
+    ? (playing ? "Reading chapter\u2026" : "Listen to this chapter")
+    : (playing ? "Reading aloud\u2026"   : "Listen to this section");
 
   return (
     <div style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
       <div style={{
-        display: "flex",
-        flexDirection: "column",
-        gap: "0.65rem",
+        display: "flex", flexDirection: "column", gap: "0.65rem",
         padding: "0.85rem 1rem",
-        background: playing ? "var(--ts-green-soft)"  : "var(--ts-surface-hi)",
-        border:    `1px solid ${playing ? "var(--ts-green-border)" : "var(--ts-border-hi)"}`,
+        background: playing ? "var(--ts-green-soft)" : "var(--ts-surface-hi)",
+        border: `1px solid ${playing ? "var(--ts-green-border)" : "var(--ts-border-hi)"}`,
         borderRadius: 12,
         transition: "background 0.2s, border-color 0.2s",
       }}>
-        {/* Top row: play button + label + progress */}
         <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
-          {/* Play / Pause button */}
-          <button
-            onClick={handlePlay}
-            aria-label={playing ? "Pause" : "Play"}
-            style={{
-              width: 36, height: 36, borderRadius: "50%", flexShrink: 0,
-              background: playing
-                ? "linear-gradient(135deg, var(--ts-green), #34d399)"
-                : "linear-gradient(135deg, var(--ts-violet), #818cf8)",
-              border: "none", cursor: "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              color: "#0d0918", fontSize: "0.82rem",
-              boxShadow: playing
-                ? "0 0 12px var(--ts-green-soft)"
-                : "0 0 12px var(--ts-violet-glow)",
-              transition: "background 0.2s, box-shadow 0.2s",
-            }}
-          >
-            {playing ? "⏸" : "▶"}
+          <button onClick={handlePlay} aria-label={playing ? "Pause" : "Play"} style={{
+            width: 36, height: 36, borderRadius: "50%", flexShrink: 0,
+            background: playing
+              ? "linear-gradient(135deg, var(--ts-green), #34d399)"
+              : "linear-gradient(135deg, var(--ts-violet), #818cf8)",
+            border: "none", cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            color: "#0d0918", fontSize: "0.82rem",
+            boxShadow: playing ? "0 0 12px var(--ts-green-soft)" : "0 0 12px var(--ts-violet-glow)",
+            transition: "background 0.2s, box-shadow 0.2s",
+          }}>
+            {playing ? "\u23F8" : "\u25B6"}
           </button>
 
-          {/* Label + progress bar */}
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{
-              fontSize: "0.72rem",
-              fontWeight: 600,
-              marginBottom: "0.3rem",
+              fontSize: "0.72rem", fontWeight: 600, marginBottom: "0.3rem",
               color: playing ? "var(--ts-green)" : "var(--ts-violet)",
-              letterSpacing: "0.03em",
-              transition: "color 0.2s",
-              whiteSpace: "nowrap",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-            }}>
-              {labelText}
-            </div>
-            <div style={{
-              height: 3,
-              background: "var(--ts-border)",
-              borderRadius: 99,
-              overflow: "hidden",
-            }}>
+              letterSpacing: "0.03em", transition: "color 0.2s",
+              whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+            }}>{labelText}</div>
+            <div style={{ height: 3, background: "var(--ts-border)", borderRadius: 99, overflow: "hidden" }}>
               <div style={{
                 height: "100%",
                 background: playing
@@ -192,28 +180,18 @@ export default function AudioRenderer({ block, variant = "default" }: AudioRende
           </div>
         </div>
 
-        {/* Speed controls row — always horizontal, wraps if needed */}
         <div style={{ display: "flex", gap: "0.2rem", flexWrap: "wrap" }}>
           {SPEEDS.map(s => (
-            <button
-              key={s.value}
-              onClick={() => handleSpeedChange(s.value)}
-              style={{
-                padding: "0.25rem 0.5rem",
-                borderRadius: 6,
-                border: `1px solid ${speed === s.value ? "var(--ts-violet)" : "var(--ts-border)"}`,
-                background: speed === s.value ? "var(--ts-violet)" : "transparent",
-                color: speed === s.value ? "#0d0918" : "var(--ts-text-muted)",
-                fontSize: "0.65rem",
-                fontWeight: speed === s.value ? 700 : 400,
-                cursor: "pointer",
-                fontFamily: "'Space Grotesk', sans-serif",
-                transition: "background 0.15s, color 0.15s, border-color 0.15s",
-                flexShrink: 0,
-              }}
-            >
-              {s.label}
-            </button>
+            <button key={s.value} onClick={() => handleSpeedChange(s.value)} style={{
+              padding: "0.25rem 0.5rem", borderRadius: 6,
+              border: `1px solid ${speed === s.value ? "var(--ts-violet)" : "var(--ts-border)"}`,
+              background: speed === s.value ? "var(--ts-violet)" : "transparent",
+              color: speed === s.value ? "#0d0918" : "var(--ts-text-muted)",
+              fontSize: "0.65rem", fontWeight: speed === s.value ? 700 : 400,
+              cursor: "pointer", fontFamily: "'Space Grotesk', sans-serif",
+              transition: "background 0.15s, color 0.15s, border-color 0.15s",
+              flexShrink: 0,
+            }}>{s.label}</button>
           ))}
         </div>
       </div>

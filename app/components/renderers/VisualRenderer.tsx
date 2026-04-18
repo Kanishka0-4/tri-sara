@@ -121,6 +121,16 @@ function InjectStyles() {
   return null;
 }
 
+/* ── Known structural noise words that should never render as content ── */
+const NOISE_WORDS = new Set([
+  "block", "data", "type", "title", "name", "step", "concept",
+  "description", "features", "children", "visual_example", "application",
+]);
+
+function isNoise(s: string): boolean {
+  return !s || NOISE_WORDS.has(s.toLowerCase().trim());
+}
+
 /* ── Parsers ── */
 function getMeta(block: string) {
   return {
@@ -128,25 +138,32 @@ function getMeta(block: string) {
     title: block.match(/^title:\s*(.+)/m)?.[1]?.trim() ?? "",
   };
 }
+
 function dataBody(block: string) {
   return block
     .replace(/^type:[^\n]*\n?/m, "")
     .replace(/^title:[^\n]*\n?/m, "")
     .replace(/^data:\s*\n?/m, "");
 }
+
 function splitTopLevel(body: string): string[] {
   const items: string[] = [];
   let buf: string[] = [];
   for (const line of body.split("\n")) {
-    if (/^- /.test(line) && buf.length > 0) { items.push(buf.join("\n").trim()); buf = []; }
+    if (/^- /.test(line) && buf.length > 0) {
+      items.push(buf.join("\n").trim());
+      buf = [];
+    }
     buf.push(line);
   }
   if (buf.join("").trim()) items.push(buf.join("\n").trim());
   return items.filter(Boolean);
 }
+
 function scalar(raw: string, key: string) {
   return raw.match(new RegExp(`^\\s*${key}:\\s*(.+)`, "m"))?.[1]?.trim() ?? "";
 }
+
 function subList(raw: string, key: string): string[] {
   const keyIdx = raw.search(new RegExp(`^\\s*${key}:`, "m"));
   if (keyIdx === -1) return [];
@@ -158,35 +175,56 @@ function subList(raw: string, key: string): string[] {
   }
   return result;
 }
+
 const KEY_PREFIX_RX = /^\s*(?:concept|step|name|application|description|visual_example|features|data|type|title)\s*:\s*/i;
-function stripKeyPrefix(s: string): string { return s.replace(KEY_PREFIX_RX, "").trim(); }
+
+function stripKeyPrefix(s: string): string {
+  return s.replace(KEY_PREFIX_RX, "").trim();
+}
 
 function parseItem(raw: string) {
   const rawHeader = raw.split("\n")[0].replace(/^-\s*/, "").trim();
-  const header = stripKeyPrefix(rawHeader);
+  const header    = stripKeyPrefix(rawHeader);
+
+  // Guard: if header is a bare structural keyword, treat as empty
+  const safeHeader = isNoise(header) ? "" : header;
+
+  const name           = stripKeyPrefix(scalar(raw, "name"))        || safeHeader;
+  const concept        = stripKeyPrefix(scalar(raw, "concept"))     || safeHeader;
+  const step           = stripKeyPrefix(scalar(raw, "step"))        || safeHeader;
+  const description    = scalar(raw, "description");
+  const application    = scalar(raw, "application");
+  const visual_example = scalar(raw, "visual_example");
+  const features       = subList(raw, "features");
+  const steps          = subList(raw, "steps");
+
   return {
     raw,
-    header,
-    name:           stripKeyPrefix(scalar(raw, "name")    || header),
-    description:    scalar(raw, "description"),
-    concept:        stripKeyPrefix(scalar(raw, "concept") || header),
-    step:           stripKeyPrefix(scalar(raw, "step")    || header),
-    application:    scalar(raw, "application"),
-    visual_example: scalar(raw, "visual_example"),
-    features:       subList(raw, "features"),
-    steps:          subList(raw, "steps"),
+    header: safeHeader,
+    name:    isNoise(name)    ? "" : name,
+    concept: isNoise(concept) ? "" : concept,
+    step:    isNoise(step)    ? "" : step,
+    description,
+    application,
+    visual_example,
+    features,
+    steps,
   };
 }
-function bestLabel(item: ReturnType<typeof parseItem>) {
-  if (item.step    && item.step    !== item.header) return item.step;
-  if (item.concept && item.concept !== item.header) return item.concept;
-  return item.name;
+
+function bestLabel(item: ReturnType<typeof parseItem>): string {
+  if (item.step    && !isNoise(item.step))    return item.step;
+  if (item.concept && !isNoise(item.concept)) return item.concept;
+  if (item.name    && !isNoise(item.name))    return item.name;
+  return item.header;
 }
 
 /* ── Tree parser ── */
 interface TreeNode { name: string; description: string; children: TreeNode[]; }
+
 function parseTree(block: string): TreeNode[] {
   const lines = dataBody(block).split("\n");
+
   function walk(from: number, minIndent: number): { nodes: TreeNode[]; next: number } {
     const nodes: TreeNode[] = [];
     let i = from;
@@ -196,7 +234,8 @@ function parseTree(block: string): TreeNode[] {
       const indent = line.search(/\S/);
       if (indent < minIndent) break;
       if (line.trim().startsWith("- name:")) {
-        const name = stripKeyPrefix(line.trim().replace(/^-\s*/, ""));
+        const nameRaw = stripKeyPrefix(line.trim().replace(/^-\s*/, ""));
+        const name = isNoise(nameRaw) ? "(unnamed)" : nameRaw;
         let description = "";
         let j = i + 1;
         while (j < lines.length) {
@@ -216,10 +255,11 @@ function parseTree(block: string): TreeNode[] {
     }
     return { nodes, next: i };
   }
+
   return walk(0, 0).nodes;
 }
 
-/* ── Palettes (CSS vars → works in both themes) ── */
+/* ── Palettes ── */
 const DEPTH_PALETTE = [
   { accent: "var(--ts-violet)", border: "var(--ts-border-hi)",   bg: "var(--ts-violet-soft)" },
   { accent: "var(--ts-cyan)",   border: "rgba(34,211,238,0.25)", bg: "var(--ts-cyan-glow)"   },
@@ -238,7 +278,9 @@ const CYCLE_COLORS = [
 
 /* ══ FLOW ══ */
 function FlowVisual({ title, block }: { title: string; block: string }) {
-  const items = splitTopLevel(dataBody(block)).map(parseItem);
+  const items = splitTopLevel(dataBody(block)).map(parseItem).filter(it => bestLabel(it));
+  if (!items.length) return null;
+
   return (
     <div className="vr-root">
       {title && <h3 className="vr-title">{title}</h3>}
@@ -319,19 +361,32 @@ function HierarchyVisual({ title, block }: { title: string; block: string }) {
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "0.45rem" }}>
-          {splitTopLevel(dataBody(block)).map((raw, i) => {
-            const item = parseItem(raw); const label = bestLabel(item);
-            const c = DEPTH_PALETTE[i % DEPTH_PALETTE.length];
-            return (
-              <div key={i} className="vr-animate" style={{ display: "flex", gap: "0.65rem", alignItems: "flex-start", background: c.bg, border: `1px solid ${c.border}`, borderLeft: `3px solid ${c.accent}`, borderRadius: "0 10px 10px 0", padding: "0.6rem 0.9rem", minWidth: 0, animationDelay: `${i * 50}ms` }}>
-                <div style={{ flexShrink: 0, width: 20, height: 20, borderRadius: "50%", background: c.accent, color: "#0d0918", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.62rem", fontWeight: 700, marginTop: 2 }}>{i + 1}</div>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontWeight: 700, fontSize: "0.88rem", color: "var(--ts-text)", wordWrap: "break-word" }}>{label}</div>
-                  {item.description && <div className="vr-tree-desc">{item.description}</div>}
+          {splitTopLevel(dataBody(block))
+            .map(parseItem)
+            .filter(item => bestLabel(item))
+            .map((item, i) => {
+              const label = bestLabel(item);
+              const c = DEPTH_PALETTE[i % DEPTH_PALETTE.length];
+              return (
+                <div key={i} className="vr-animate" style={{
+                  display: "flex", gap: "0.65rem", alignItems: "flex-start",
+                  background: c.bg, border: `1px solid ${c.border}`,
+                  borderLeft: `3px solid ${c.accent}`, borderRadius: "0 10px 10px 0",
+                  padding: "0.6rem 0.9rem", minWidth: 0, animationDelay: `${i * 50}ms`,
+                }}>
+                  <div style={{
+                    flexShrink: 0, width: 20, height: 20, borderRadius: "50%",
+                    background: c.accent, color: "#0d0918",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: "0.62rem", fontWeight: 700, marginTop: 2,
+                  }}>{i + 1}</div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: "0.88rem", color: "var(--ts-text)", wordWrap: "break-word" }}>{label}</div>
+                    {item.description && <div className="vr-tree-desc">{item.description}</div>}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
         </div>
       )}
     </div>
@@ -340,7 +395,8 @@ function HierarchyVisual({ title, block }: { title: string; block: string }) {
 
 /* ══ COMPARISON ══ */
 function ComparisonVisual({ title, block }: { title: string; block: string }) {
-  const items = splitTopLevel(dataBody(block)).map(parseItem);
+  const items = splitTopLevel(dataBody(block)).map(parseItem).filter(it => bestLabel(it));
+  if (!items.length) return null;
   const colClass = items.length >= 2 ? "vr-compare-grid vr-compare-grid-2" : "vr-compare-grid";
   return (
     <div className="vr-root">
@@ -352,10 +408,13 @@ function ComparisonVisual({ title, block }: { title: string; block: string }) {
           const feats = item.features.length ? item.features : subList(item.raw, "features");
           const example = item.visual_example;
           return (
-            <div key={i} className={`vr-compare-card vr-animate`} style={{ border: `1px solid ${c.border}`, animationDelay: `${i * 70}ms` }}>
-              {/* top accent stripe */}
+            <div key={i} className="vr-compare-card vr-animate" style={{ border: `1px solid ${c.border}`, animationDelay: `${i * 70}ms` }}>
               <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: c.accent }} />
-              <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 20, height: 20, borderRadius: "50%", background: c.accent, color: "#0d0918", fontSize: "0.62rem", fontWeight: 800, marginBottom: "0.5rem" }}>{String.fromCharCode(65 + i)}</div>
+              <div style={{
+                display: "inline-flex", alignItems: "center", justifyContent: "center",
+                width: 20, height: 20, borderRadius: "50%", background: c.accent,
+                color: "#0d0918", fontSize: "0.62rem", fontWeight: 800, marginBottom: "0.5rem",
+              }}>{String.fromCharCode(65 + i)}</div>
               <div style={{ fontWeight: 700, color: c.accent, fontSize: "0.9rem", lineHeight: 1.3, marginBottom: "0.5rem", wordWrap: "break-word" }}>{label}</div>
               {feats.length > 0 && (
                 <ul style={{ margin: 0, paddingLeft: "1rem", marginBottom: example ? "0.6rem" : 0 }}>
@@ -363,7 +422,13 @@ function ComparisonVisual({ title, block }: { title: string; block: string }) {
                 </ul>
               )}
               {example && (
-                <div style={{ marginTop: "0.55rem", background: "var(--ts-surface)", border: `1px solid ${c.border}`, borderRadius: 8, padding: "0.4rem 0.7rem", fontFamily: "'JetBrains Mono','Fira Code',monospace", fontSize: "0.74rem", color: c.accent, wordBreak: "break-all" }}>{example}</div>
+                <div style={{
+                  marginTop: "0.55rem", background: "var(--ts-surface)",
+                  border: `1px solid ${c.border}`, borderRadius: 8,
+                  padding: "0.4rem 0.7rem",
+                  fontFamily: "'JetBrains Mono','Fira Code',monospace",
+                  fontSize: "0.74rem", color: c.accent, wordBreak: "break-all",
+                }}>{example}</div>
               )}
             </div>
           );
@@ -375,7 +440,8 @@ function ComparisonVisual({ title, block }: { title: string; block: string }) {
 
 /* ══ CYCLE ══ */
 function CycleVisual({ title, block }: { title: string; block: string }) {
-  const items = splitTopLevel(dataBody(block)).map(parseItem);
+  const items = splitTopLevel(dataBody(block)).map(parseItem).filter(it => bestLabel(it));
+  if (!items.length) return null;
   return (
     <div className="vr-root">
       {title && <h3 className="vr-title">{title}</h3>}
@@ -386,7 +452,11 @@ function CycleVisual({ title, block }: { title: string; block: string }) {
           return (
             <div key={i} style={{ display: "contents" }}>
               <div className="vr-cycle-pill vr-animate" style={{ border: `1px solid ${color}`, animationDelay: `${i * 55}ms` }}>
-                <div style={{ width: 18, height: 18, borderRadius: "50%", background: color, color: "#0d0918", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.6rem", fontWeight: 700, flexShrink: 0 }}>{i + 1}</div>
+                <div style={{
+                  width: 18, height: 18, borderRadius: "50%", background: color,
+                  color: "#0d0918", display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: "0.6rem", fontWeight: 700, flexShrink: 0,
+                }}>{i + 1}</div>
                 <span style={{ fontSize: "0.8rem", fontWeight: 600, color, whiteSpace: "nowrap" }}>{label}</span>
               </div>
               {i < items.length - 1 && <span style={{ color: "var(--ts-text-dim)", fontSize: "0.85rem" }}>→</span>}
@@ -403,8 +473,18 @@ function CycleVisual({ title, block }: { title: string; block: string }) {
             const color = CYCLE_COLORS[i % CYCLE_COLORS.length];
             if (!desc) return null;
             return (
-              <div key={i} className="vr-animate" style={{ display: "flex", gap: "0.65rem", alignItems: "flex-start", background: "var(--ts-surface)", border: "1px solid var(--ts-border)", borderLeft: `3px solid ${color}`, borderRadius: "0 10px 10px 0", padding: "0.55rem 0.9rem", minWidth: 0, animationDelay: `${i * 55}ms` }}>
-                <div style={{ flexShrink: 0, width: 18, height: 18, borderRadius: "50%", background: color, color: "#0d0918", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.6rem", fontWeight: 700, marginTop: 2 }}>{i + 1}</div>
+              <div key={i} className="vr-animate" style={{
+                display: "flex", gap: "0.65rem", alignItems: "flex-start",
+                background: "var(--ts-surface)", border: "1px solid var(--ts-border)",
+                borderLeft: `3px solid ${color}`, borderRadius: "0 10px 10px 0",
+                padding: "0.55rem 0.9rem", minWidth: 0, animationDelay: `${i * 55}ms`,
+              }}>
+                <div style={{
+                  flexShrink: 0, width: 18, height: 18, borderRadius: "50%",
+                  background: color, color: "#0d0918",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: "0.6rem", fontWeight: 700, marginTop: 2,
+                }}>{i + 1}</div>
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontWeight: 700, fontSize: "0.85rem", color, marginBottom: "0.1rem", wordWrap: "break-word" }}>{label}</div>
                   <div className="vr-cycle-desc">{desc}</div>
@@ -418,9 +498,28 @@ function CycleVisual({ title, block }: { title: string; block: string }) {
   );
 }
 
+/* ══ ROOT ══ */
+const SUPPORTED_TYPES = ["flow", "hierarchy", "comparison", "cycle"] as const;
+type SupportedType = typeof SUPPORTED_TYPES[number];
+
 export default function VisualRenderer({ block }: VisualProps) {
   const { type, title } = getMeta(block);
+
+  // Silently skip if type is empty or block is clearly malformed
+  if (!type || !SUPPORTED_TYPES.includes(type as SupportedType)) {
+    // Only show error in dev mode
+    if (process.env.NODE_ENV === "development" && type) {
+      return (
+        <div className="vr-unsupported">
+          Unsupported visual type: <strong>{type}</strong>
+        </div>
+      );
+    }
+    return null;
+  }
+
   const wrapClass = `vr-wrap vr-wrap-${type}`;
+
   return (
     <>
       <InjectStyles />
@@ -428,9 +527,6 @@ export default function VisualRenderer({ block }: VisualProps) {
       {type === "hierarchy"  && <div className={wrapClass}><HierarchyVisual  title={title} block={block} /></div>}
       {type === "comparison" && <div className={wrapClass}><ComparisonVisual title={title} block={block} /></div>}
       {type === "cycle"      && <div className={wrapClass}><CycleVisual      title={title} block={block} /></div>}
-      {!["flow","hierarchy","comparison","cycle"].includes(type) && (
-        <div className="vr-unsupported">Unsupported visual type: <strong>{type || "(none)"}</strong></div>
-      )}
     </>
   );
 }

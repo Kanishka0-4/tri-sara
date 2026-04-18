@@ -21,32 +21,51 @@ function getRanking(p: LearningProfile) {
   return Object.entries(p).sort((a, b) => b[1] - a[1]).map(([k]) => k);
 }
 
-/* ─── Aggressive tag-leak killer ─────────────────────────────── */
-// Structural/scaffolding section headings that should never be shown to users
-const STRUCTURAL_HEADINGS_RX = /^#{1,4}\s*(Analogy|Real.?World\s+(?:Application|Example)|Key\s+Takeaways?|Summary|Introduction|Overview|Example|Definition|Explanation|Application|Concept|Context|Background|Conclusion)\s*$/gim;
+/* ─── ALL structural headings that must never render ─────────── */
+// Matches both "### Analogy" and "### Section Analogy" forms, case-insensitive
+const STRUCTURAL_HEADINGS_RX =
+  /^#{1,4}\s*(?:Section\s+)?(?:Analogy|Real[\s-]?World\s*(?:Application|Example)?|Key\s+Takeaways?|Summary|Introduction|Overview|Example|Definition|Explanation|Application|Concept|Context|Background|Conclusion|Quiz|Questions?|Multiple\s+Choice|MCQ)\s*$/gim;
 
 function normaliseContent(src: string): string {
-  return src
-    // Fix newline-broken closing tags  [\n/TEXT] → [/TEXT]
-    .replace(/\[\s*\n\s*\/(TEXT|VISUAL|AUDIO)\]/gi, "[/$1]")
-    // Strip structural scaffolding headings (Analogy, Real World Application, etc.)
-    .replace(STRUCTURAL_HEADINGS_RX, "")
-    // Strip quiz scaffolding
-    .replace(/#{1,3}\s*(Quiz|Questions?|Multiple Choice|MCQ).*\n?/gi, "")
-    .replace(/\d+\.\s*.*\?\s*\n?(A\)|B\)|C\)|D\)).*\n?/gi, "")
-    .replace(/^[A-D]\)\s*.*\n?/gm, "")
-    .replace(/Correct\s*(answer|Answer|option|Option).*:?\s*[A-D]\s*\n?/gi, "")
-    .replace(/Answer\s*:\s*[A-D]\s*\n?/gi, "")
-    // Bullets
-    .replace(/^\*\s+/gm, "- ");
+  return (
+    src
+      // 🔥 ADD THIS LINE (MOST IMPORTANT FIX)
+      .replace(/\n?\s*\[(TEXT|VISUAL|AUDIO)\]\s*/gi, "\n[$1]\n")
+
+      // Fix newline-broken closing tags  [\n/TEXT] → [/TEXT]
+      .replace(/\[\s*\n\s*\/(TEXT|VISUAL|AUDIO)\]/gi, "[/$1]")
+
+      // Remove ALL structural section headings
+      .replace(STRUCTURAL_HEADINGS_RX, "")
+
+      // Remove quiz scaffolding
+      .replace(/\d+\.\s*.*\?\s*\n?(A\)|B\)|C\)|D\)).*\n?/gi, "")
+      .replace(/^[A-D]\)\s*.*\n?/gm, "")
+      .replace(/Correct\s*(answer|option).*:?\s*[A-D]\s*\n?/gi, "")
+      .replace(/Answer\s*:\s*[A-D]\s*\n?/gi, "")
+
+      // Normalise bullets
+      .replace(/^\*\s+/gm, "- ")
+
+      // Strip bare AI noise words
+      .replace(/^block\s*$/gim, "")
+  );
 }
 
-// Called only on extracted text/gap chunks AFTER tag parsing — never on full source
+// Noise words the AI emits as standalone lines or as the FIRST line of a block
+const NOISE_LINE_RX = /^(block|data|section)\s*$/gim;
+
+// Cleans orphan tag fragments and AI noise words from extracted text chunks
 function cleanTextChunk(s: string): string {
   return s
-    .replace(/\[\s*\/\s*(TEXT|VISUAL|AUDIO)\s*\]/gi, "")  // orphan closers
-    .replace(/\[\s*(TEXT|VISUAL|AUDIO)\s*\]/gi, "")         // orphan openers
-    .replace(/^(TEXT|VISUAL|AUDIO)\s*$/gim, "")             // bare tag word on own line
+    .replace(/\[\s*\/\s*(TEXT|VISUAL|AUDIO)\s*\]/gi, "")
+    .replace(/\[\s*(TEXT|VISUAL|AUDIO)\s*\]/gi, "")
+    .replace(/^(TEXT|VISUAL|AUDIO)\s*$/gim, "")
+    // Remove noise words on their own line anywhere in the chunk
+    .replace(NOISE_LINE_RX, "")
+    // Strip if noise word is literally the first token on first line (alone or inline)
+    .replace(/^\s*block[ \t]*\n/im, "")
+    .replace(/^block\s+(?=[A-Z])/m, "")
     .trim();
 }
 
@@ -57,8 +76,9 @@ function stripKeyTakeaways(block: string): string {
 /* ─── Tag parser ─────────────────────────────────────────────── */
 function parseTaggedParts(src: string) {
   const parts: { type: "visual" | "audio" | "text"; content: string }[] = [];
-  const tagRx = /\[\s*(TEXT|VISUAL|AUDIO)\s*\]([\s\S]*?)\[\s*\/\s*\1\s*\]/gi;
-  let last = 0, m: RegExpExecArray | null;
+  const tagRx = /\[\s*(TEXT|VISUAL|AUDIO)\s*\]([\s\S]*?)(?=\[\s(TEXT|VISUAL|AUDIO)\s*\]|\s*$)/gi;
+  let last = 0;
+  let m: RegExpExecArray | null;
 
   while ((m = tagRx.exec(src)) !== null) {
     if (m.index > last) {
@@ -66,15 +86,20 @@ function parseTaggedParts(src: string) {
       if (plain) parts.push({ type: "text", content: plain });
     }
     const t = m[1].toLowerCase() as "visual" | "audio" | "text";
-    const c = m[2].trim(); // keep visual/audio content intact
+    // Also clean noise words from inside the tag content (not just gap text)
+    const c = t === "text" ? cleanTextChunk(m[2]) : m[2].trim();
     if (c) parts.push({ type: t, content: c });
     last = tagRx.lastIndex;
   }
+
   if (last < src.length) {
     const rest = cleanTextChunk(src.slice(last));
     if (rest) parts.push({ type: "text", content: rest });
   }
-  if (!parts.length && src.trim()) parts.push({ type: "text", content: cleanTextChunk(src) });
+
+  if (!parts.length && src.trim())
+    parts.push({ type: "text", content: cleanTextChunk(src) });
+
   return parts;
 }
 
@@ -82,50 +107,66 @@ function parseTaggedParts(src: string) {
 function FadeIn({ children, delay = 0 }: { children: React.ReactNode; delay?: number }) {
   const ref = useRef<HTMLDivElement>(null);
   const [vis, setVis] = useState(false);
+
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
     const obs = new IntersectionObserver(
-      ([e]) => { if (e.isIntersecting) { setVis(true); obs.disconnect(); } },
+      ([e]) => {
+        if (e.isIntersecting) { setVis(true); obs.disconnect(); }
+      },
       { threshold: 0.06 }
     );
     obs.observe(el);
     return () => obs.disconnect();
   }, []);
+
   return (
-    <div ref={ref} style={{
-      opacity:   vis ? 1 : 0,
-      transform: vis ? "translateY(0)" : "translateY(16px)",
-      transition: `opacity 0.45s ease ${delay}ms, transform 0.45s ease ${delay}ms`,
-      willChange: "opacity, transform",
-    }}>
+    <div
+      ref={ref}
+      style={{
+        opacity:    vis ? 1 : 0,
+        transform:  vis ? "translateY(0)" : "translateY(16px)",
+        transition: `opacity 0.45s ease ${delay}ms, transform 0.45s ease ${delay}ms`,
+      }}
+    >
       {children}
     </div>
   );
 }
 
 export default function MarkdownRenderer({
-  content, profile, moduleId, subjectId,
-  setAudioContent, quiz = [], onQuizComplete,
+  content,
+  profile,
+  moduleId,
+  subjectId,
+  setAudioContent,
+  quiz = [],
+  onQuizComplete,
 }: MarkdownRendererProps) {
   const ranking        = getRanking(profile);
   const isAudioPrimary = ranking[0] === "audio";
   const normalised     = normaliseContent(content);
   const taggedParts    = parseTaggedParts(normalised);
+  console.log("TAGGED PARTS:", taggedParts);
+ const audioParts = taggedParts.filter((p) => p.type === "audio");
 
-  const audioContent = taggedParts
-    .filter(p => p.type === "audio")
-    .map(p => stripKeyTakeaways(p.content))
-    .join("\n\n");
-
+const audioContent =
+  audioParts.length > 0
+    ? audioParts.map((p) => stripKeyTakeaways(p.content)).join("\n\n")
+    : taggedParts
+        .filter((p) => p.type === "text")
+        .map((p) => stripKeyTakeaways(p.content))
+        .join("\n\n");
   useEffect(() => {
     if (setAudioContent && audioContent) setAudioContent(audioContent);
   }, [audioContent, setAudioContent]);
 
   /* theme */
-  const [theme, setTheme] = useState<"dark"|"light">("dark");
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
   useEffect(() => {
-    const saved = (document.documentElement.getAttribute("data-theme") as "dark"|"light") || "dark";
+    const saved =
+      (document.documentElement.getAttribute("data-theme") as "dark" | "light") || "dark";
     setTheme(saved);
   }, []);
   const toggleTheme = () => {
@@ -147,7 +188,6 @@ export default function MarkdownRenderer({
           line-height: 1.78;
           word-wrap: break-word;
           overflow-wrap: break-word;
-          overflow-x: hidden;
         }
 
         /* toggle */
@@ -163,10 +203,7 @@ export default function MarkdownRenderer({
         }
         .md-toggle-btn:hover { background:var(--ts-violet-bubble); box-shadow:0 0 14px var(--ts-violet-glow); }
 
-        /*
-         * TEXT BLOCK — no box.
-         * Just a subtle left-border timeline, content flows naturally.
-         */
+        /* TEXT block — subtle left-border timeline */
         .md-text-block {
           position: relative;
           padding: 0 0 1.75rem 1.35rem;
@@ -175,7 +212,6 @@ export default function MarkdownRenderer({
         }
         .md-text-block:last-of-type { padding-bottom: 0.5rem; }
         .md-text-block:hover        { border-color: var(--ts-border-hi); }
-        /* bullet dot on the timeline */
         .md-text-block::before {
           content: '';
           position: absolute;
@@ -192,34 +228,11 @@ export default function MarkdownRenderer({
           .md-text-block { padding-left: 1rem; padding-bottom: 1.25rem; }
         }
 
-        /*
-         * VISUAL BLOCK — plain wrapper, vr-wrap handles all the styling.
-         */
-        .md-visual-block {
-          position: relative;
-          margin-bottom: 1.75rem;
-        }
-        @media (max-width:640px) {
-          .md-visual-block { margin-bottom: 1.25rem; }
-        }
+        /* VISUAL block */
+        .md-visual-block { position: relative; margin-bottom: 1.75rem; }
+        @media (max-width:640px) { .md-visual-block { margin-bottom: 1.25rem; } }
 
-        /* "Visual" badge inside visual block */
-        .md-visual-label {
-          display: inline-flex; align-items: center; gap: 0.35rem;
-          font-size: 0.64rem; font-weight: 700;
-          letter-spacing: 0.12em; text-transform: uppercase;
-          color: var(--ts-violet);
-          margin-bottom: 0.85rem;
-          position: relative; z-index: 1;
-        }
-        .md-visual-label::before {
-          content: '';
-          display: inline-block; width: 5px; height: 5px;
-          border-radius: 50%; background: var(--ts-violet);
-          box-shadow: 0 0 6px var(--ts-violet);
-        }
-
-        /* AUDIO block — no extra wrapper needed */
+        /* AUDIO block */
         .md-audio-block { margin-bottom: 1.75rem; }
         @media (max-width:640px) { .md-audio-block { margin-bottom: 1.25rem; } }
 
@@ -234,7 +247,8 @@ export default function MarkdownRenderer({
           border-bottom:1px solid var(--ts-border-hi);
           padding-bottom:0.4rem; margin-top:1.4rem; margin-bottom:0.85rem;
         }
-        .md-root h3 { font-size:clamp(0.95rem,2.5vw,1.05rem); font-weight:600; color:var(--ts-violet); margin-top:1rem; }
+        /* h3 suppressed — section headings must never show */
+        .md-root h3 { display: none; }
         .md-root p  { color:var(--ts-text); margin-bottom:0.75rem; font-size:clamp(0.9rem,2.5vw,1rem); line-height:1.78; }
         .md-root strong { color:var(--ts-violet); font-weight:700; }
         .md-root em     { color:var(--ts-text-muted); font-style:italic; }
@@ -293,74 +307,144 @@ export default function MarkdownRenderer({
         .md-root a { color:var(--ts-cyan); text-decoration:underline; text-underline-offset:3px; }
         .md-root a:hover { color:var(--ts-violet); }
         .md-root hr { border:none; border-top:1px solid var(--ts-border); margin:1.75rem 0; }
+
+        /* Key Takeaways section — styled pill strip */
+        .md-takeaways {
+          background: var(--ts-violet-bubble);
+          border: 1px solid var(--ts-border-hi);
+          border-left: 3px solid var(--ts-violet);
+          border-radius: 0 14px 14px 0;
+          padding: 1rem 1.25rem;
+          margin: 1.5rem 0 0.5rem;
+        }
+        .md-takeaways-label {
+          font-size: 0.65rem;
+          font-weight: 700;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+          color: var(--ts-violet);
+          margin-bottom: 0.65rem;
+          display: flex;
+          align-items: center;
+          gap: 0.4rem;
+        }
+        .md-takeaways-label::before {
+          content: '';
+          display: inline-block;
+          width: 5px; height: 5px;
+          border-radius: 50%;
+          background: var(--ts-violet);
+          box-shadow: 0 0 6px var(--ts-violet);
+        }
       `}</style>
 
       <div className="md-root">
 
-        {/* toggle */}
+        {/* theme toggle */}
         <div className="md-toggle-row">
-          <button className="md-toggle-btn" onClick={toggleTheme}
-            aria-label={theme === "dark" ? "Switch to light" : "Switch to dark"}>
-            <span style={{ fontSize: "0.92rem", lineHeight: 1 }}>{theme === "dark" ? "☀" : "🌙"}</span>
+          <button
+            className="md-toggle-btn"
+            onClick={toggleTheme}
+            aria-label={theme === "dark" ? "Switch to light" : "Switch to dark"}
+          >
+            <span style={{ fontSize: "0.92rem", lineHeight: 1 }}>
+              {theme === "dark" ? "☀" : "🌙"}
+            </span>
             {theme === "dark" ? "Light" : "Dark"}
           </button>
         </div>
 
         {/* content blocks */}
         {taggedParts.map((part, i) => {
-          const delay = Math.min(i * 55, 280);
+  const delay = Math.min(i * 55, 280);
 
-          if (part.type === "visual") {
-            if (!part.content?.trim()) return null;
-            return (
-            <FadeIn key={i} delay={delay}>
-              <div className="md-visual-block">
-                <div style={{ position: "relative", zIndex: 1 }}>
-                  <AdaptiveRenderer block={part.content} type="visual"
-                    profile={profile} moduleId={moduleId} subjectId={subjectId} />
-                </div>
-              </div>
-            </FadeIn>
-          );}
+  // 🔹 VISUAL
+  if (part.type === "visual") {
+    if (!part.content?.trim()) return null;
 
-          if (part.type === "audio") {
-            if (!part.content?.trim()) return null;
-            return (
-            <FadeIn key={i} delay={delay}>
-              <div className="md-audio-block">
-                <AdaptiveRenderer block={part.content} type="audio"
-                  profile={profile} moduleId={moduleId} subjectId={subjectId} />
-              </div>
-            </FadeIn>
-          );}
+    return (
+      <FadeIn key={i} delay={delay}>
+        <div className="md-visual-block">
+          <AdaptiveRenderer
+            block={part.content}
+            type="visual"
+            profile={profile}
+            moduleId={moduleId}
+            subjectId={subjectId}
+          />
+        </div>
+      </FadeIn>
+    );
+  }
 
-          if (!part.content.trim()) return null;
+  // 🔹 AUDIO BLOCK (from [AUDIO])
+  if (part.type === "audio") {
+    return (
+      <div key={i} className="md-audio-block">
+        <AudioRenderer
+          block={stripKeyTakeaways(part.content)}
+          variant="chapter"
+        />
+      </div>
+    );
+  }
 
-          if (isAudioPrimary) return (
-            <FadeIn key={i} delay={delay}>
-              <div className="md-visual-block">
-                <div style={{ position: "relative", zIndex: 1 }}>
-                  <AdaptiveRenderer block={part.content} type="text"
-                    profile={profile} moduleId={moduleId} subjectId={subjectId} />
-                </div>
-              </div>
-            </FadeIn>
-          );
+  // 🔹 TEXT
+  if (!part.content?.trim()) return null;
 
-          return (
-            <FadeIn key={i} delay={delay}>
-              <div className="md-text-block">
-                <AdaptiveRenderer block={part.content} type="text"
-                  profile={profile} moduleId={moduleId} subjectId={subjectId} />
-              </div>
-            </FadeIn>
-          );
+  const isTakeaways = part.content.trim().startsWith("-");
+
+  return (
+    <FadeIn key={i} delay={delay}>
+      {isTakeaways ? (
+        <div className="md-takeaways">
+          <div className="md-takeaways-label">Key Takeaways</div>
+
+          <div
+            className="md-text-block"
+            style={{ border: "none", paddingLeft: 0 }}
+          >
+            <AdaptiveRenderer
+              block={part.content}
+              type="text"
+              profile={profile}
+              moduleId={moduleId}
+              subjectId={subjectId}
+            />
+
+            {/* 🔊 INLINE AUDIO */}
+            <AudioRenderer
+              block={stripKeyTakeaways(part.content)}
+            />
+          </div>
+        </div>
+      ) : (
+        <div className="md-text-block">
+          <AdaptiveRenderer
+            block={part.content}
+            type="text"
+            profile={profile}
+            moduleId={moduleId}
+            subjectId={subjectId}
+          />
+
+          {/* 🔊 INLINE AUDIO */}
+          <AudioRenderer block={part.content} />
+        </div>
+      )}
+    </FadeIn>
+  );
         })}
 
-        {/* chapter audio player */}
+        
+
+        {/* chapter audio player — combined player for all audio blocks */}
         {audioContent && (
           <FadeIn delay={200}>
-            <div className="md-audio-block" style={{ marginTop: "1.75rem" }}>
+            <div className="md-audio-block" style={{ marginTop: "1.75rem", borderTop: "1px solid var(--ts-border)", paddingTop: "1.25rem" }}>
+              <div style={{ fontSize: "0.65rem", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--ts-dim, var(--ts-text-muted))", marginBottom: "0.65rem" }}>
+                Full Chapter Audio
+              </div>
               <AudioRenderer block={audioContent} variant="chapter" />
             </div>
           </FadeIn>
@@ -369,8 +453,10 @@ export default function MarkdownRenderer({
         {/* chapter quiz */}
         {quiz.length > 0 && (
           <FadeIn delay={260}>
-            <ChapterQuiz quiz={quiz}
-              onComplete={(score, total) => onQuizComplete?.(score, total)} />
+            <ChapterQuiz
+              quiz={quiz}
+              onComplete={(score, total) => onQuizComplete?.(score, total)}
+            />
           </FadeIn>
         )}
 
