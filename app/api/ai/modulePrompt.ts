@@ -271,82 +271,23 @@ The material must feel like well-written study notes.
 
 --------------------------------------------------
 
-MANDATORY CHAPTER FLOW (STRICT — DO NOT BREAK)
+Each chapter MUST include the following structure:
 
-Each chapter MUST follow this exact structure:
+• one analogy  
+• one real-world application  
+• one example  
+• one bullet list at the end  
 
-### analogy  
-[TEXT]  
-[/TEXT]  
-
-[VISUAL]  
-[/VISUAL]  
-
-[AUDIO] (if applicable)  
-[/AUDIO]  
-
-### real-world application  
-[TEXT]  
-[/TEXT]  
-
-[VISUAL]  
-[/VISUAL]  
-
-[AUDIO] (if applicable)  
-[/AUDIO]  
-
-### example  
-[TEXT]  
-[/TEXT]  
-
-[VISUAL]  
-[/VISUAL]  
-
-[AUDIO] (if applicable)  
-[/AUDIO]  
-
-### Key Takeaways / Bullet Points  
-• point 1  
-• point 2  
-• point 3  
-• point 4  
-• point 5  
-
---------------------------------------------------
-
-STRUCTURE RULES (CRITICAL)
-
-• The chapter is divided FIRST by:
-  analogy → application → example → takeaways  
-
-• Inside EACH section:
-  include [TEXT], [VISUAL], and [AUDIO] (if applicable)
-
-• Do NOT place analogy/application/example outside this structure  
-• Do NOT create standalone TEXT/VISUAL/AUDIO sections at chapter level  
-
---------------------------------------------------
-
-BLOCK RULES
-
-• TEXT, VISUAL, AUDIO must stay INSIDE their respective section  
-• Each block must contribute uniquely (no repetition)  
-• VISUAL must represent the concept of that section  
-• AUDIO must explain that section intuitively  
-
---------------------------------------------------
-
-KEY TAKEAWAYS RULES
-
-• Maximum 5 bullet points  
-• Must be concise and high-value  
-• Do NOT repeat content  
-
+bullet points format:
+### Key Takeaways
+• The bullet points must be brief, important points from the chapter. It should not exceed 5 points. It should not be a summary of the chapter, but rather the most critical insights or concepts that the learner should remember.
 --------------------------------------------------
 
 IMPORTANT
 
 Do NOT mention learning styles anywhere in the content.
+
+The content should follow the learning style percentages stircly.
 
 --------------------------------------------------
 
@@ -367,6 +308,8 @@ OUTPUT FORMAT RULES (STRICT)
 6. Do NOT write explanations outside markdown  
 
 7. Return ONLY the markdown content  
+
+8. Always write content inside the tags [TEXT], [VISUAL], and [AUDIO] as specified in the structure rules. opening tag must be followed by the content and then the closing tag. Do NOT write any content outside these tags.
 
 `.trim();
 }
