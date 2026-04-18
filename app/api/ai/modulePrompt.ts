@@ -271,19 +271,77 @@ The material must feel like well-written study notes.
 
 --------------------------------------------------
 
-Each chapter MUST include:
+MANDATORY CHAPTER FLOW (STRICT — DO NOT BREAK)
 
-• one analogy  
-• one real-world application  
-• one example  
-• one bullet list at the end  
+Each chapter MUST follow this exact structure:
 
-Format:
 ### analogy  
+[TEXT]  
+[/TEXT]  
+
+[VISUAL]  
+[/VISUAL]  
+
+[AUDIO] (if applicable)  
+[/AUDIO]  
+
 ### real-world application  
-### example   
-### Key Takeaways / Bullet Points
-• The bullet points must be brief, important points from the chapter. It should not exceed 5 points. It should not be a summary of the chapter, but rather the most critical insights or concepts that the learner should remember.
+[TEXT]  
+[/TEXT]  
+
+[VISUAL]  
+[/VISUAL]  
+
+[AUDIO] (if applicable)  
+[/AUDIO]  
+
+### example  
+[TEXT]  
+[/TEXT]  
+
+[VISUAL]  
+[/VISUAL]  
+
+[AUDIO] (if applicable)  
+[/AUDIO]  
+
+### Key Takeaways / Bullet Points  
+• point 1  
+• point 2  
+• point 3  
+• point 4  
+• point 5  
+
+--------------------------------------------------
+
+STRUCTURE RULES (CRITICAL)
+
+• The chapter is divided FIRST by:
+  analogy → application → example → takeaways  
+
+• Inside EACH section:
+  include [TEXT], [VISUAL], and [AUDIO] (if applicable)
+
+• Do NOT place analogy/application/example outside this structure  
+• Do NOT create standalone TEXT/VISUAL/AUDIO sections at chapter level  
+
+--------------------------------------------------
+
+BLOCK RULES
+
+• TEXT, VISUAL, AUDIO must stay INSIDE their respective section  
+• Each block must contribute uniquely (no repetition)  
+• VISUAL must represent the concept of that section  
+• AUDIO must explain that section intuitively  
+
+--------------------------------------------------
+
+KEY TAKEAWAYS RULES
+
+• Maximum 5 bullet points  
+• Must be concise and high-value  
+• Do NOT repeat content  
+
 --------------------------------------------------
 
 IMPORTANT
