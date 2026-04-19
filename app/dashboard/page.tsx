@@ -624,7 +624,7 @@ export default function DashboardPage() {
                   fontSize: 10, fontWeight: 600, letterSpacing: "0.18em",
                   textTransform: "uppercase", color: C.violet, marginBottom: 3,
                 }}>
-                  Study Planner
+                  Tri-Sara
                 </div>
                 <h1 style={{
                   fontFamily: "'Space Grotesk', sans-serif",
