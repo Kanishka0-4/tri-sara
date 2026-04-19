@@ -21,62 +21,40 @@ function getRanking(p: LearningProfile) {
   return Object.entries(p).sort((a, b) => b[1] - a[1]).map(([k]) => k);
 }
 
-/* ─── ALL structural headings that must never render ─────────── */
-// Matches both "### Analogy" and "### Section Analogy" forms, case-insensitive
+/* ─── Structural headings that must never render ─────────────── */
 const STRUCTURAL_HEADINGS_RX =
   /^#{1,4}\s*(?:Section\s+)?(?:Analogy|Real[\s-]?World\s*(?:Application|Example)?|Key\s+Takeaways?|Summary|Introduction|Overview|Example|Definition|Explanation|Application|Concept|Context|Background|Conclusion|Quiz|Questions?|Multiple\s+Choice|MCQ)\s*$/gim;
 
 function normaliseContent(src: string): string {
-  return (
-    src
-      // 🔥 ADD THIS LINE (MOST IMPORTANT FIX)
-      .replace(/\n?\s*\[(TEXT|VISUAL|AUDIO)\]\s*/gi, "\n[$1]\n")
-
-      // Fix newline-broken closing tags  [\n/TEXT] → [/TEXT]
-      .replace(/\[\s*\n\s*\/(TEXT|VISUAL|AUDIO)\]/gi, "[/$1]")
-
-      // Remove ALL structural section headings
-      .replace(STRUCTURAL_HEADINGS_RX, "")
-
-      // Remove quiz scaffolding
-      .replace(/\d+\.\s*.*\?\s*\n?(A\)|B\)|C\)|D\)).*\n?/gi, "")
-      .replace(/^[A-D]\)\s*.*\n?/gm, "")
-      .replace(/Correct\s*(answer|option).*:?\s*[A-D]\s*\n?/gi, "")
-      .replace(/Answer\s*:\s*[A-D]\s*\n?/gi, "")
-
-      // Normalise bullets
-      .replace(/^\*\s+/gm, "- ")
-
-      // Strip bare AI noise words
-      .replace(/^block\s*$/gim, "")
-  );
+  return src
+    .replace(/\n?\s*\[(TEXT|VISUAL|AUDIO)\]\s*/gi, "\n[$1]\n")
+    .replace(/\[\s*\n\s*\/(TEXT|VISUAL|AUDIO)\]/gi, "[/$1]")
+    .replace(STRUCTURAL_HEADINGS_RX, "")
+    .replace(/\d+\.\s*.*\?\s*\n?(A\)|B\)|C\)|D\)).*\n?/gi, "")
+    .replace(/^[A-D]\)\s*.*\n?/gm, "")
+    .replace(/Correct\s*(answer|option).*:?\s*[A-D]\s*\n?/gi, "")
+    .replace(/Answer\s*:\s*[A-D]\s*\n?/gi, "")
+    .replace(/^\*\s+/gm, "- ")
+    .replace(/^block\s*$/gim, "");
 }
 
-// Noise words the AI emits as standalone lines or as the FIRST line of a block
 const NOISE_LINE_RX = /^(block|data|section)\s*$/gim;
 
-// Cleans orphan tag fragments and AI noise words from extracted text chunks
 function cleanTextChunk(s: string): string {
   return s
     .replace(/\[\s*\/\s*(TEXT|VISUAL|AUDIO)\s*\]/gi, "")
     .replace(/\[\s*(TEXT|VISUAL|AUDIO)\s*\]/gi, "")
     .replace(/^(TEXT|VISUAL|AUDIO)\s*$/gim, "")
-    // Remove noise words on their own line anywhere in the chunk
     .replace(NOISE_LINE_RX, "")
-    // Strip if noise word is literally the first token on first line (alone or inline)
     .replace(/^\s*block[ \t]*\n/im, "")
     .replace(/^block\s+(?=[A-Z])/m, "")
     .trim();
 }
 
-function stripKeyTakeaways(block: string): string {
-  return block.replace(/Key\s*Takeaways[\s\S]*/gi, "").trim();
-}
-
-/* ─── Tag parser ─────────────────────────────────────────────── */
+/* ─── Tag parser — backreference cleanly bounds each block ───── */
 function parseTaggedParts(src: string) {
   const parts: { type: "visual" | "audio" | "text"; content: string }[] = [];
-  const tagRx = /\[\s*(TEXT|VISUAL|AUDIO)\s*\]([\s\S]*?)(?=\[\s(TEXT|VISUAL|AUDIO)\s*\]|\s*$)/gi;
+  const tagRx = /\[\s*(TEXT|VISUAL|AUDIO)\s*\]([\s\S]*?)\[\/\s*\1\s*\]/gi;
   let last = 0;
   let m: RegExpExecArray | null;
 
@@ -86,7 +64,6 @@ function parseTaggedParts(src: string) {
       if (plain) parts.push({ type: "text", content: plain });
     }
     const t = m[1].toLowerCase() as "visual" | "audio" | "text";
-    // Also clean noise words from inside the tag content (not just gap text)
     const c = t === "text" ? cleanTextChunk(m[2]) : m[2].trim();
     if (c) parts.push({ type: t, content: c });
     last = tagRx.lastIndex;
@@ -112,9 +89,7 @@ function FadeIn({ children, delay = 0 }: { children: React.ReactNode; delay?: nu
     const el = ref.current;
     if (!el) return;
     const obs = new IntersectionObserver(
-      ([e]) => {
-        if (e.isIntersecting) { setVis(true); obs.disconnect(); }
-      },
+      ([e]) => { if (e.isIntersecting) { setVis(true); obs.disconnect(); } },
       { threshold: 0.06 }
     );
     obs.observe(el);
@@ -144,25 +119,28 @@ export default function MarkdownRenderer({
   quiz = [],
   onQuizComplete,
 }: MarkdownRendererProps) {
-  const ranking        = getRanking(profile);
-  const isAudioPrimary = ranking[0] === "audio";
-  const normalised     = normaliseContent(content);
-  const taggedParts    = parseTaggedParts(normalised);
-  console.log("TAGGED PARTS:", taggedParts);
- const audioParts = taggedParts.filter((p) => p.type === "audio");
+  const ranking     = getRanking(profile);
+  const normalised  = normaliseContent(content);
+  const taggedParts = parseTaggedParts(normalised);
 
-const audioContent =
-  audioParts.length > 0
-    ? audioParts.map((p) => stripKeyTakeaways(p.content)).join("\n\n")
-    : taggedParts
-        .filter((p) => p.type === "text")
-        .map((p) => stripKeyTakeaways(p.content))
-        .join("\n\n");
+  // ─── Chapter narration ────────────────────────────────────────
+  // The [AUDIO] block is a model-written narration covering the full
+  // chapter. Its depth/length is controlled by audio rank in the prompt:
+  //   highest → full lecture style  (220–280 words)
+  //   second  → chapter overview    (130–170 words)
+  //   lowest  → short recap         (60–90 words)
+  // It is NOT rendered inline — only shown in the bottom player.
+  const audioParts = taggedParts.filter((p) => p.type === "audio");
+  const chapterAudioContent = audioParts.map((p) => p.content.trim()).join("\n\n");
+
+  // Pass narration content up to parent if needed (e.g. for a global player)
   useEffect(() => {
-    if (setAudioContent && audioContent) setAudioContent(audioContent);
-  }, [audioContent, setAudioContent]);
+    if (setAudioContent && chapterAudioContent) {
+      setAudioContent(chapterAudioContent);
+    }
+  }, [chapterAudioContent, setAudioContent]);
 
-  /* theme */
+  /* ─── Theme ─────────────────────────────────────────────────── */
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   useEffect(() => {
     const saved =
@@ -308,7 +286,7 @@ const audioContent =
         .md-root a:hover { color:var(--ts-violet); }
         .md-root hr { border:none; border-top:1px solid var(--ts-border); margin:1.75rem 0; }
 
-        /* Key Takeaways section — styled pill strip */
+        /* Key Takeaways styled block */
         .md-takeaways {
           background: var(--ts-violet-bubble);
           border: 1px solid var(--ts-border-hi);
@@ -336,6 +314,21 @@ const audioContent =
           background: var(--ts-violet);
           box-shadow: 0 0 6px var(--ts-violet);
         }
+
+        /* Chapter narration divider */
+        .md-narration-block {
+          margin-top: 1.75rem;
+          border-top: 1px solid var(--ts-border);
+          padding-top: 1.25rem;
+        }
+        .md-narration-label {
+          font-size: 0.65rem;
+          font-weight: 700;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          color: var(--ts-dim, var(--ts-text-muted));
+          margin-bottom: 0.65rem;
+        }
       `}</style>
 
       <div className="md-root">
@@ -354,103 +347,102 @@ const audioContent =
           </button>
         </div>
 
-        {/* content blocks */}
+        {/* ─── Content blocks ──────────────────────────────────────── */}
         {taggedParts.map((part, i) => {
-  const delay = Math.min(i * 55, 280);
+          const delay = Math.min(i * 55, 280);
 
-  // 🔹 VISUAL
-  if (part.type === "visual") {
-    if (!part.content?.trim()) return null;
+          // ── VISUAL ──
+          if (part.type === "visual") {
+            if (!part.content?.trim()) return null;
+            return (
+              <FadeIn key={i} delay={delay}>
+                <div className="md-visual-block">
+                  <AdaptiveRenderer
+                    block={part.content}
+                    type="visual"
+                    profile={profile}
+                    moduleId={moduleId}
+                    subjectId={subjectId}
+                  />
+                </div>
+              </FadeIn>
+            );
+          }
 
-    return (
-      <FadeIn key={i} delay={delay}>
-        <div className="md-visual-block">
-          <AdaptiveRenderer
-            block={part.content}
-            type="visual"
-            profile={profile}
-            moduleId={moduleId}
-            subjectId={subjectId}
-          />
-        </div>
-      </FadeIn>
-    );
-  }
+          // ── AUDIO ──
+          // The [AUDIO] block is the model-written chapter narration.
+          // It does NOT render inline — it is collected and shown in
+          // the "Chapter Narration" player at the bottom of the page.
+          // Inline (sectional) audio comes from TTS on [TEXT] blocks.
+          if (part.type === "audio") return null;
 
-  // 🔹 AUDIO BLOCK (from [AUDIO])
-  if (part.type === "audio") {
-    return (
-      <div key={i} className="md-audio-block">
-        <AudioRenderer
-          block={stripKeyTakeaways(part.content)}
-          variant="chapter"
-        />
-      </div>
-    );
-  }
+          // ── TEXT ──
+          if (!part.content?.trim()) return null;
 
-  // 🔹 TEXT
-  if (!part.content?.trim()) return null;
+          // Takeaways detection: only flag as takeaways if an [AUDIO]
+          // block has already appeared before this block in the list.
+          // The takeaways [TEXT] always comes after [AUDIO] in the structure,
+          // so this correctly distinguishes it from the first [TEXT] block
+          // which also starts with "-" bullets.
+          const audioAppearedBefore = taggedParts
+            .slice(0, i)
+            .some((p) => p.type === "audio");
+          const isTakeaways = audioAppearedBefore && part.content.trim().startsWith("-");
 
-  const isTakeaways = part.content.trim().startsWith("-");
-
-  return (
-    <FadeIn key={i} delay={delay}>
-      {isTakeaways ? (
-        <div className="md-takeaways">
-          <div className="md-takeaways-label">Key Takeaways</div>
-
-          <div
-            className="md-text-block"
-            style={{ border: "none", paddingLeft: 0 }}
-          >
-            <AdaptiveRenderer
-              block={part.content}
-              type="text"
-              profile={profile}
-              moduleId={moduleId}
-              subjectId={subjectId}
-            />
-
-            {/* 🔊 INLINE AUDIO */}
-            <AudioRenderer
-              block={stripKeyTakeaways(part.content)}
-            />
-          </div>
-        </div>
-      ) : (
-        <div className="md-text-block">
-          <AdaptiveRenderer
-            block={part.content}
-            type="text"
-            profile={profile}
-            moduleId={moduleId}
-            subjectId={subjectId}
-          />
-
-          {/* 🔊 INLINE AUDIO */}
-          <AudioRenderer block={part.content} />
-        </div>
-      )}
-    </FadeIn>
-  );
+          return (
+            <FadeIn key={i} delay={delay}>
+              {isTakeaways ? (
+                <div className="md-takeaways">
+                  <div className="md-takeaways-label">Key Takeaways</div>
+                  <div
+                    className="md-text-block"
+                    style={{ border: "none", paddingLeft: 0 }}
+                  >
+                    <AdaptiveRenderer
+                      block={part.content}
+                      type="text"
+                      profile={profile}
+                      moduleId={moduleId}
+                      subjectId={subjectId}
+                    />
+                    {/* Sectional TTS: reads this takeaways block aloud */}
+                    <AudioRenderer block={part.content.trim()} />
+                  </div>
+                </div>
+              ) : (
+                <div className="md-text-block">
+                  <AdaptiveRenderer
+                    block={part.content}
+                    type="text"
+                    profile={profile}
+                    moduleId={moduleId}
+                    subjectId={subjectId}
+                  />
+                  {/* Sectional TTS: reads this text block aloud inline */}
+                  <AudioRenderer block={part.content.trim()} />
+                </div>
+              )}
+            </FadeIn>
+          );
         })}
 
-        
-
-        {/* chapter audio player — combined player for all audio blocks */}
-        {audioContent && (
+        {/* ─── Chapter Narration player ─────────────────────────────
+            Contains the model-written [AUDIO] block — a narration that
+            covers the full chapter. Depth scales with audio rank:
+              highest → full lecture style  (220–280 words)
+              second  → chapter overview    (130–170 words)
+              lowest  → short recap         (60–90 words)
+        ──────────────────────────────────────────────────────────── */}
+        {chapterAudioContent && (
           <FadeIn delay={200}>
-            <div className="md-audio-block" style={{ marginTop: "1.75rem", borderTop: "1px solid var(--ts-border)", paddingTop: "1.25rem" }}>
-              <div style={{ fontSize: "0.65rem", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--ts-dim, var(--ts-text-muted))", marginBottom: "0.65rem" }}>
-                Full Chapter Audio
-              </div>
-              <AudioRenderer block={audioContent} variant="chapter" />
+            <div className="md-audio-block md-narration-block">
+              <div className="md-narration-label">Chapter Narration</div>
+              <AudioRenderer block={chapterAudioContent} variant="chapter" />
             </div>
           </FadeIn>
         )}
 
-        {/* chapter quiz */}
+        {/* ─── Chapter quiz ─────────────────────────────────────────── */}
         {quiz.length > 0 && (
           <FadeIn delay={260}>
             <ChapterQuiz

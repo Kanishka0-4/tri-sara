@@ -33,79 +33,98 @@ export async function generateModuleContent({
   };
   moduleOrder: number;
 }) {
-  try {
-    console.log(`🤖 Generating Module ${moduleOrder}...`);
+  console.log(`🤖 Generating Module ${moduleOrder}...`);
 
-    /* -------- LEARNING PROFILE -------- */
+  /* -------- LEARNING PROFILE -------- */
 
-    const result = await pool.query(
-      `
-      SELECT users.learning_profile
-      FROM users
-      JOIN module_subjects
-      ON users.id = module_subjects.user_id
-      WHERE module_subjects.id = $1
-      `,
-      [subjectId]
-    );
+  const result = await pool.query(
+    `
+    SELECT users.learning_profile
+    FROM users
+    JOIN module_subjects ON users.id = module_subjects.user_id
+    WHERE module_subjects.id = $1
+    `,
+    [subjectId]
+  );
 
-    if (!result.rows.length) {
-      throw new Error("User learning profile not found");
-    }
+  if (!result.rows.length) {
+    throw new Error("User learning profile not found");
+  }
 
-    const profile = result.rows[0].learning_profile;
+  const profile = result.rows[0].learning_profile;
+  const topics = module.topics ?? [];
+  const goal = module.expected_outcome ?? module.goal ?? "";
 
-    const topics = module.topics ?? [];
-    const goal = module.expected_outcome ?? module.goal ?? "";
+  const prompt = buildModulePrompt({
+    subjectTitle,
+    moduleTitle: module.title,
+    topics,
+    goal,
+    profile,
+  });
 
-    const prompt = buildModulePrompt({
-      subjectTitle,
-      moduleTitle: module.title,
-      topics,
-      goal,
-      profile,
-    });
+  /* -------- GROQ GENERATION (with one retry) -------- */
 
-    /* -------- GROQ GENERATION -------- */
+  let content = "";
+  const MAX_ATTEMPTS = 2;
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    console.log(`🔁 Attempt ${attempt} for Module ${moduleOrder}...`);
 
     const response = await groq.chat.completions.create({
-      model: "llama-3.1-8b-instant",
+      model: "llama-3.3-70b-versatile",
       messages: [
+        {
+          // System role: strict instruction following
+          role: "system",
+          content:
+            "You are an expert university educator. You always follow formatting instructions exactly. " +
+            "You never skip content blocks, never shorten chapters, and never output any content outside the specified [TEXT], [VISUAL], and [AUDIO] tags. " +
+            "You always complete all chapters fully before stopping.",
+        },
         {
           role: "user",
           content: prompt,
         },
       ],
-      temperature: 0.7,
+      temperature: 0.3,   // Lower = more deterministic, better format adherence
+      max_tokens: 8000,
     });
 
-    const content = response.choices[0]?.message?.content || "";
+    const raw = response.choices[0]?.message?.content ?? "";
 
-    if (!content || content.length < 200) {
-      throw new Error("Generated content too short");
+    if (raw.length >= 500) {
+      content = raw;
+      break;
     }
 
-    /* -------- SAVE -------- */
-
-    const insertResult = await pool.query(
-      `
-      INSERT INTO module_content
-      (subject_id, module_order, content)
-      VALUES ($1,$2,$3)
-      RETURNING *
-      `,
-      [subjectId, moduleOrder, content]
+    console.warn(
+      `⚠️ Attempt ${attempt} produced short content (${raw.length} chars). ${
+        attempt < MAX_ATTEMPTS ? "Retrying..." : "Giving up."
+      }`
     );
 
-    console.log("✅ INSERTED:", insertResult.rows);
-    console.log(`✅ Module ${moduleOrder} saved`);
-
-    return content;
-
-  } catch (err) {
-    console.error(`❌ Module ${moduleOrder} failed:`, err);
-    throw err;
+    if (attempt === MAX_ATTEMPTS) {
+      throw new Error(
+        `Generated content too short after ${MAX_ATTEMPTS} attempts (last: ${raw.length} chars)`
+      );
+    }
   }
+
+  /* -------- SAVE (safe against race conditions) -------- */
+
+  const insertResult = await pool.query(
+  `
+  INSERT INTO module_content (subject_id, module_order, content)
+  VALUES ($1, $2, $3)
+  RETURNING *
+  `,
+  [subjectId, moduleOrder, content]
+);
+
+  console.log(`✅ Module ${moduleOrder} saved`, insertResult.rows[0]?.id);
+
+  return content;
 }
 
 /* ---------------- GET OR CREATE ---------------- */
@@ -133,31 +152,21 @@ export async function getOrCreateModuleContent({
   );
 
   if (existing.rows.length && existing.rows[0].content) {
-    console.log(`📦 Module ${moduleOrder} exists`);
+    console.log(`📦 Module ${moduleOrder} loaded from cache`);
     return existing.rows[0].content;
   }
 
   /* -------- GENERATE IF MISSING -------- */
 
-  console.log(`⚠️ Module ${moduleOrder} missing → generating`);
+  console.log(`⚠️ Module ${moduleOrder} not found → generating`);
 
-  await generateModuleContent({
+  // Use the returned content directly — no need to re-query
+  const content = await generateModuleContent({
     subjectId,
     subjectTitle,
     module,
     moduleOrder,
   });
 
-  /* -------- FETCH AGAIN -------- */
-
-  const newData = await pool.query(
-    `
-    SELECT content
-    FROM module_content
-    WHERE subject_id = $1 AND module_order = $2
-    `,
-    [subjectId, moduleOrder]
-  );
-
-  return newData.rows[0]?.content || null;
+  return content;
 }

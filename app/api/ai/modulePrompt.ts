@@ -17,370 +17,316 @@ export function buildModulePrompt({
 }) {
   const safeTopics = topics ?? [];
 
+  /* ------------------------------------------------------------------ */
+  /* STEP 1 — Rank modalities, handle ties deterministically             */
+  /* ------------------------------------------------------------------ */
+
+  type Modality = { name: string; value: number };
+
+  const modalities: Modality[] = [
+    { name: "TEXT",   value: profile.text   },
+    { name: "VISUAL", value: profile.visual },
+    { name: "AUDIO",  value: profile.audio  },
+  ];
+
+  // Sort descending; on a tie, prefer TEXT > VISUAL > AUDIO (arbitrary but consistent)
+  const tieOrder: Record<string, number> = { TEXT: 0, VISUAL: 1, AUDIO: 2 };
+  modalities.sort((a, b) =>
+    b.value !== a.value ? b.value - a.value : tieOrder[a.name] - tieOrder[b.name]
+  );
+
+  const [primary, secondary, tertiary] = modalities;
+
+  const rankOf = (name: string): "highest" | "second" | "lowest" => {
+    if (primary.name   === name) return "highest";
+    if (secondary.name === name) return "second";
+    return "lowest";
+  };
+
+  /* ------------------------------------------------------------------ */
+  /* STEP 2 — Per-modality rule strings (ALL 3 ranks × 3 modalities)    */
+  /* ------------------------------------------------------------------ */
+
+  // ── TEXT ──
+  const textRules: Record<"highest" | "second" | "lowest", string> = {
+    highest: `
+[TEXT] block is PRIMARY — it carries the main explanation.
+- Write exactly 12–14 bullet points. No more, no fewer.
+- Max 2 sentences per bullet.
+- Total word count: 280–340 words.
+- Every bullet must be concrete and information-rich — no filler, no repetition.
+- Do NOT pad with generic closing statements like "X is important for developers".
+[/TEXT]`.trim(),
+
+    second: `
+[TEXT] block is SUPPORTING — it reinforces the primary modality.
+- Write exactly 7–9 bullet points. No more, no fewer.
+- Max 2 sentences per bullet.
+- Total word count: 160–210 words.
+- Text must complement the visual — do NOT restate what the visual already shows.
+- Do NOT pad with generic closing statements.
+[/TEXT]`.trim(),
+
+    lowest: `
+[TEXT] block is MINIMAL — brief orientation only.
+- Write exactly 4–6 bullet points. No more, no fewer.
+- 1 sentence per bullet.
+- Total word count: 100–140 words.
+- Only name and define key terms. Leave all explanation to the primary modality.
+[/TEXT]`.trim(),
+  };
+
+  // ── VISUAL ──
+  const visualRules: Record<"highest" | "second" | "lowest", string> = {
+    highest: `
+[VISUAL] block is PRIMARY — visuals carry the main explanation.
+- Include exactly 2 VISUAL blocks per chapter, each explaining a DIFFERENT concept.
+- Choose the most appropriate type for each concept (flow, cycle, hierarchy, comparison).
+- Each visual must be detailed: at least 4 data items.
+- Text and audio must support visuals, not repeat them.
+- A student must be able to understand the chapter concept from visuals alone.
+[/VISUAL]`.trim(),
+
+    second: `
+[VISUAL] block is SUPPORTING — visuals reinforce and extend the text.
+- Include exactly 1 VISUAL block per chapter.
+- Choose the type that best maps the concept's structure.
+- Must have at least 3 data items — do not produce a thin visual.
+- Must show something the text does not explicitly state (a relationship, a structure, a contrast).
+[/VISUAL]`.trim(),
+
+    lowest: `
+[VISUAL] block is MINIMAL — one simple supplementary visual only.
+- Include exactly 1 VISUAL block per chapter, kept simple.
+- Maximum 3 data items.
+- The visual is decorative/supplementary — understanding must not depend on it.
+[/VISUAL]`.trim(),
+  };
+
+  // ── AUDIO ──
+  const audioRules: Record<"highest" | "second" | "lowest", string> = {
+  highest: `
+[AUDIO] block is a FULL CHAPTER NARRATION — primary learning mode.
+- Write 220–280 words in a warm, friendly teacher voice.
+- Must cover the ENTIRE chapter: analogy, core concept, real-world example, and conclusion.
+- Structure (follow this order):
+  1. Open with a vivid analogy that makes the whole concept click.
+  2. Walk through the concept step by step as if lecturing to a student.
+  3. Give a detailed real-world example with specific names/numbers/scenarios.
+  4. Close with a sentence connecting this chapter to the bigger subject.
+- A student who ONLY listens to this audio must fully understand the entire chapter.
+- This is NOT a summary — it is a complete standalone lecture in audio form.
+[/AUDIO]`.trim(),
+
+  second: `
+[AUDIO] block is a CHAPTER OVERVIEW NARRATION — supporting learning mode.
+- Write 130–170 words in a clear, engaging conversational tone.
+- Must cover the ENTIRE chapter at a medium level of detail.
+- Structure (follow this order):
+  1. Open with a short analogy or hook.
+  2. Explain the core concept and its key components conversationally.
+  3. Give one concrete real-world example.
+  4. Close with the single most important takeaway from the chapter.
+- Should feel like a concise podcast segment covering the chapter topic.
+- Must NOT simply repeat bullet points from the text — synthesise and narrate.
+[/AUDIO]`.trim(),
+
+  lowest: `
+[AUDIO] block is a CHAPTER SUMMARY NARRATION — minimal learning mode.
+- Write 60–90 words in a punchy, clear tone.
+- Must still reference the full chapter — not just one concept.
+- Structure:
+  1. One analogy or hook sentence.
+  2. Two or three sentences covering the most important points of the chapter.
+  3. One closing sentence with the key takeaway.
+- Think of it as a 30-second recap that gives a complete picture of the chapter.
+[/AUDIO]`.trim(),
+};
+
+  const textRule   = textRules[rankOf("TEXT")];
+  const visualRule = visualRules[rankOf("VISUAL")];
+  const audioRule  = audioRules[rankOf("AUDIO")];
+
+  /* ------------------------------------------------------------------ */
+  /* STEP 3 — Assemble prompt                                            */
+  /* ------------------------------------------------------------------ */
+
   return `
-You are an expert university educator generating adaptive learning material.
+You are an expert university educator. Generate structured learning content for the module below.
 
-SUBJECT
-${subjectTitle}
+SUBJECT: ${subjectTitle}
+MODULE:  ${moduleTitle}
+GOAL:    ${goal ?? ""}
 
-MODULE
-${moduleTitle}
-
-MODULE GOAL
-${goal ?? ""}
-
---------------------------------------------------
-
-SUBTOPICS (CHAPTER LIST)
-
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CHAPTERS TO GENERATE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${safeTopics.map((t, i) => `${i + 1}. ${t}`).join("\n")}
 
-Each subtopic MUST become exactly ONE chapter.
+Generate exactly ${safeTopics.length} chapters. Each chapter maps to exactly one subtopic above.
 
---------------------------------------------------
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+LEARNER PROFILE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Text:   ${profile.text}%
+Visual: ${profile.visual}%
+Audio:  ${profile.audio}%
 
-LEARNING PROFILE
+Modality priority (highest → lowest):
+1. ${primary.name}   (${primary.value}%) ← PRIMARY
+2. ${secondary.name} (${secondary.value}%) ← SUPPORTING
+3. ${tertiary.name}  (${tertiary.value}%) ← MINIMAL
 
-Visual emphasis: ${profile.visual}%
-Audio emphasis: ${profile.audio}%
-Text emphasis:  ${profile.text}%
+This ranking MUST be clearly reflected in the depth and length of each block.
 
---------------------------------------------------
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+RANKING ENFORCEMENT — CRITICAL
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-LEARNING PRIORITY ORDER
+The modality ranking MUST be physically visible in the output.
+A reader must be able to look at any chapter and immediately identify
+which modality is primary just from the volume and depth of content.
 
-Rank the modalities from highest to lowest based on percentage.
+STRICT RULES:
+- The PRIMARY block must always be noticeably longer and deeper than SUPPORTING.
+- The SUPPORTING block must always be noticeably longer and deeper than MINIMAL.
+- If two modalities have equal percentages, their blocks must be equal in depth.
+- NEVER let the TEXT block dominate if it is not ranked PRIMARY.
+- Do NOT add extra bullets or sentences to any block beyond the specified range.
+- Do NOT pad any block with generic conclusions, motivational statements,
+  or phrases like "mastering X will help you become a better developer."
+  Every sentence must carry unique informational value.
 
-Highest = primary mode  
-Second  = supporting mode  
-Lowest  = minimal mode  
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CONTENT BLOCK FORMAT — MANDATORY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-The structure of the content MUST follow this ranking.
-
---------------------------------------------------
-
-CONTENT ADAPTATION RULES
-
-Adapt BOTH structure and explanation style dynamically according to ranking (not just tone).
-The content should feel cohesive and unified.
-
---------------------------------------------------
-
-CHAPTER-LEVEL ADAPTATION (STRICT AND MANDATORY)
-
-All adaptation MUST happen at the CHAPTER level, NOT at the module level.
-
-Each chapter must independently:
-• Apply ranking-based structure (text, visual, audio)
-• Adjust depth and explanation style
-• Follow content block rules ([TEXT], [VISUAL], [AUDIO])
-
---------------------------------------------------
-
-CHAPTER STRUCTURE REQUIREMENT
-
-Each chapter MUST follow this structure:
-
-1. [TEXT] → structured explanation based on text priority
-2. [VISUAL] → concept visualization
-3. [AUDIO] → intuitive explanation (if audio is not lowest)
-
---------------------------------------------------
-
-CONSISTENCY RULE
-
-All chapters must:
-• maintain similar depth
-• follow the same structure pattern
-• feel cohesive as one module
-
---------------------------------------------------
-
-CONTENT LENGTH CONTROL (VERY IMPORTANT)
-
-The entire module must be realistically completable in 1 week assuming 1–2 hours of study per day.
-
-Therefore:
-• Each chapter should represent ~1–2 hours of study
-• Maintain moderate depth across chapters
-• Avoid overly long or overly short chapters
-• Keep content balanced across all chapters
-
---------------------------------------------------
-
-CONTENT STRUCTURE RULES (CRITICAL)
-
-TEXT PRIORITY RULES
-
-If TEXT is highest:
-• Use structured bullet-point explanations
-• Avoid long paragraphs
-• Not more than 3 sentences per bullet
-• Provide complete explanation in bullets in 300–400 words total
-
-If TEXT is second:
-• Provide summarized explanation in bullet points (8–12 points)
-• Not more than 2 sentences per bullet within the range of 200–250 words
-• The text points must explain the concept, but more concise than if TEXT were highest
-• Should NOT contain the content of visual as-is
-• Text should support visuals (not repeat them)
-
-If TEXT is lowest:
-• Only provide short summary (5–8 bullets)
-• Do NOT fully explain concepts in text; word limit in the range 150–200
-
---------------------------------------------------
-
-VISUAL PRIORITY RULES
-
-If VISUAL is highest:
-• Visual blocks must carry the main explanation
-• Use flows, hierarchies, comparisons heavily
-• Text should support visuals (not repeat them)
-• At least 2 visuals per chapter, each explaining a different concept
-
-If VISUAL is second:
-• Use moderate visuals to explain relationships
-• Visuals should support text (not repeat them)
-• Use flows, hierarchies, comparisons in moderation, not as main explanation
-
-If VISUAL is lowest:
-• Use minimal or optional visuals
-• Visuals can be decorative or supplementary, not essential for understanding
-
---------------------------------------------------
-
-AUDIO PRIORITY RULES
-
-If AUDIO is highest:
-• Use conversational, natural explanation
-• Include storytelling and intuitive reasoning
-• Proper, clear explanation of concepts in audio; length sufficient to explain clearly without being too brief or too verbose
-• If the user is not reading the text, the audio should stand alone and provide a complete understanding of the chapter
-• Audio is NOT just a summary — it should provide a full explanation with examples, analogies, and intuitive reasoning
-
-If AUDIO is second:
-• Keep explanations clear and concise
-• Use audio to clarify complex concepts or provide additional insights
-• Should summarize main points AND provide additional insights/examples from the text
-• Works as a gist to the text and visual content; length should not exceed 2/3 of the text reading time; should not be too brief
-
-If AUDIO is lowest:
-• Keep AUDIO block minimal or optional
-
---------------------------------------------------
-
-CONTENT BLOCK FORMAT RULES (VERY IMPORTANT)
-
-Each chapter MUST include:
+Every chapter MUST contain blocks in this EXACT order and format:
 
 [TEXT]
-Structured explanation (based on text priority)
+content here
 [/TEXT]
 
 [VISUAL]
-Diagram or structured representation
+content here
 [/VISUAL]
 
 [AUDIO]
-Narration-style explanation (if audio is not lowest)
+content here
 [/AUDIO]
 
---------------------------------------------------
+[TEXT]
+key takeaway bullets here
+[/TEXT]
 
-CONTENT SEPARATION RULE
+CRITICAL TAG RULES:
+- Every opening tag [TEXT], [VISUAL], [AUDIO] MUST have a matching closing tag [/TEXT], [/VISUAL], [/AUDIO]
+- Closing tags MUST have a forward slash: [/TEXT] not [TEXT]
+- No content may appear outside these tags inside a chapter
+- Do NOT nest tags inside each other
 
-Text, visual, and audio MUST complement each other:
-• Do NOT repeat the same explanation
-• Do NOT duplicate sentences
-• Each block must add unique value
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DEPTH RULES PER BLOCK — FOLLOW EXACTLY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
---------------------------------------------------
+${textRule}
 
-BULLET QUALITY RULES
+${visualRule}
 
-• Bullet points must be meaningful and information-rich
-• Avoid vague or generic points
-• Each bullet must convey a clear concept
-• Do NOT repeat the same idea
+${audioRule}
 
---------------------------------------------------
-
-VISUALIZATION RULES
-
-Place each visual immediately after the concept it explains.
-
-STRICT RULES (must follow):
-
-1. Use ONLY these tags: [VISUAL] ... [/VISUAL]
-
-2. Each VISUAL block MUST include:
-   * type
-   * title
-   * data
-
-3. Each "data" list MUST contain AT LEAST 2 items (never less).
-
-4. Maintain strict indentation:
-   * Use "-" for list items
-   * Use 2 spaces for nested fields
-   * Children must be properly indented
-
-5. Do NOT add any explanation outside VISUAL blocks.
-
-6. Generate 3–5 VISUAL blocks using different types.
-
----
-
-SUPPORTED TYPES & REQUIRED STRUCTURE:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+VISUAL BLOCK FORMATS — USE ONLY THESE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 [VISUAL]
 type: flow
 title: <title>
 data:
-- step: <step 1>
-  description: <description 1>
-- step: <step 2>
-  description: <description 2>
+- step: <step>
+  description: <description>
+- step: <step>
+  description: <description>
 [/VISUAL]
 
 [VISUAL]
 type: cycle
 title: <title>
 data:
-- step: <phase 1>
-  description: <description 1>
-- step: <phase 2>
-  description: <description 2>
+- step: <phase>
+  description: <description>
+- step: <phase>
+  description: <description>
 [/VISUAL]
 
 [VISUAL]
 type: hierarchy
 title: <title>
 data:
-- concept: <concept 1>
-  description: <description 1>
-- concept: <concept 2>
-  description: <description 2>
-[/VISUAL]
-
-[VISUAL]
-type: hierarchy
-title: <title>
-data:
-- name: <parent 1>
+- name: <parent>
   description: <description>
   children:
-  - name: <child 1>
+  - name: <child>
     description: <description>
-  - name: <child 2>
+  - name: <child>
     description: <description>
-- name: <parent 2>
-  description: <description>
 [/VISUAL]
 
 [VISUAL]
 type: comparison
 title: <title>
 data:
-- concept: <concept 1>
+- concept: <concept>
   features:
-  - <feature 1>
-  - <feature 2>
+  - <feature>
+  - <feature>
   visual_example: <example>
-- concept: <concept 2>
+- concept: <concept>
   features:
-  - <feature 1>
-  - <feature 2>
+  - <feature>
+  - <feature>
   visual_example: <example>
 [/VISUAL]
 
---------------------------------------------------
+Each data list must have at least 2 items. Do not invent new types.
 
-WRITING STYLE RULES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CHAPTER RULES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-The material must feel like well-written study notes.
-• Prefer bullet points over paragraphs
-• Avoid dense text blocks
-• Maintain readability and spacing
+1. Every chapter starts with: ## Chapter X: Chapter Title
 
---------------------------------------------------
+2. No headings of ANY kind inside chapters — no ###, no bold labels, no ALL CAPS labels.
+   FORBIDDEN examples (never output these):
+   - "KEY TAKEAWAYS"
+   - "• KEY TAKEAWAYS"
+   - "**Key Takeaways**"
+   - "### Analogy"
+   - "Real-World Application:"
+   Just output the block tags and content. No labels whatsoever.
 
-CHAPTER SECTION RULES (CRITICAL — READ CAREFULLY)
+3. Each chapter must cover: an analogy, a real-world application, a worked example,
+   and key takeaways — woven naturally into the blocks without any labels.
 
-Each chapter must be internally divided into four logical sections:
-1. Analogy
-2. Real-World Application
-3. Example
-4. Key Takeaways
+4. The LAST block of every chapter must be a [TEXT]...[/TEXT] block containing
+   exactly 3–5 concise synthesis bullet points as key takeaways.
+   These must NOT repeat content from earlier in the chapter.
+   CORRECT format:
+   [TEXT]
+   - Key insight one synthesised from the chapter.
+   - Key insight two that connects concepts together.
+   - Key insight three with a practical implication.
+   [/TEXT]
 
-CRITICAL: Do NOT output any headings for these sections.
-Do NOT write "### Analogy", "### Real-World Application", "### Example", or "### Key Takeaways" anywhere.
-Do NOT write "Section Analogy", "Section Example", or any variation.
-These section names must NEVER appear in the output.
+5. TEXT, VISUAL, and AUDIO must each add unique value — no duplicated explanations.
 
-Instead, flow seamlessly between sections using only [TEXT], [VISUAL], and [AUDIO] blocks.
-The content blocks themselves will make the structure clear — no headings needed.
+6. Each chapter = ~1–2 hours of study material. Do not write thin chapters.
+   Strictly follow the bullet count and word count limits in the depth rules above.
 
-Each section content MUST contain at least ONE of [TEXT], [VISUAL], [AUDIO].
-The presence and depth of each block MUST follow modality priority:
-  - Highest → primary explanation
-  - Second  → supporting
-  - Lowest  → minimal or optional
+7. Never mention learning styles or modality names in the content.
 
---------------------------------------------------
+8. Do NOT add quizzes, module intros, or module conclusions.
 
-KEY TAKEAWAYS RULES
-
-• Output the Key Takeaways section as a [TEXT] block at the end of each chapter
-• Maximum 5 bullet points
-• Must be concise and high-value
-• Do NOT repeat content from earlier in the chapter
-• Do NOT add a heading — just output the bullets inside a [TEXT] block
-
---------------------------------------------------
-
-BLOCK PLACEMENT RULES
-
-• Do NOT place TEXT/VISUAL/AUDIO blocks outside of chapter content
-• Do NOT create any standalone blocks at module level
-• Each block must add unique value (no duplication)
-• If only one modality is used → it must fully explain the section
-• If multiple are used → they must complement each other
-
---------------------------------------------------
-
-IMPORTANT
-
-Do NOT mention learning styles anywhere in the content.
-The content should follow the learning style percentages strictly.
-
---------------------------------------------------
-
-OUTPUT FORMAT RULES (STRICT)
-
-1. Use Markdown formatting
-
-2. Each chapter MUST start exactly like:
-   ## Chapter X: Chapter Title
-
-3. Do NOT add any headings inside chapters other than the chapter title itself.
-   This means NO ### headings of any kind inside a chapter.
-
-4. Do NOT add quizzes
-
-5. Do NOT mention learning styles
-
-6. Do NOT write explanations outside markdown
-
-7. Return ONLY the markdown content
-
-8. Always write content inside the tags [TEXT], [VISUAL], and [AUDIO] as specified.
-   The opening tag must be immediately followed by the content, then the closing tag.
-   Do NOT write any content outside these tags inside a chapter.
-
-9. NEVER output section names like "Analogy", "Real-World Application", "Example", or
-   "Key Takeaways" as headings or inline labels — not even as bold text or prefixes.
-
+9. Return ONLY markdown chapter content — nothing else.
 `.trim();
 }
