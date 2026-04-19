@@ -80,7 +80,7 @@ export function buildModulePrompt({
   const visualRules: Record<"highest" | "second" | "lowest", string> = {
     highest: `
 [VISUAL] block is PRIMARY — visuals carry the main explanation.
-- Include exactly 2 VISUAL blocks per chapter, each explaining a DIFFERENT concept.
+- Include more than 1 VISUAL blocks per chapter, each explaining a DIFFERENT concept.
 - Choose the most appropriate type for each concept (flow, cycle, hierarchy, comparison).
 - Each visual must be detailed: at least 4 data items.
 - Text and audio must support visuals, not repeat them.

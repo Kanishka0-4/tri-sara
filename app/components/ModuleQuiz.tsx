@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 type ModuleQuizProps = {
   moduleQuiz: any[];
   moduleQuizLoading: boolean;
@@ -23,6 +25,19 @@ function getDaysLeft(retryAfter: number | null): number | null {
   return Math.ceil(msLeft / (1000 * 60 * 60 * 24));
 }
 
+const spinnerSvg = (
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 16 16"
+    fill="none"
+    style={{ animation: "mq-spin 0.75s linear infinite", flexShrink: 0 }}
+  >
+    <circle cx="8" cy="8" r="6" stroke="rgba(255,255,255,0.35)" strokeWidth="2" />
+    <path d="M8 2a6 6 0 0 1 6 6" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
+  </svg>
+);
+
 export default function ModuleQuiz({
   moduleQuiz,
   moduleQuizLoading,
@@ -38,6 +53,7 @@ export default function ModuleQuiz({
   onBack,
   isLastModule,
 }: ModuleQuizProps) {
+  const [isNavigating, setIsNavigating] = useState(false);
 
   const passed =
     moduleQuizScore !== null &&
@@ -50,8 +66,19 @@ export default function ModuleQuiz({
     moduleQuiz.length > 0 &&
     moduleQuiz.every((_: any, i: number) => moduleQuizAnswers[i] !== undefined);
 
+  const handleNext = () => {
+    setIsNavigating(true);
+    handleNextModule();
+  };
+
   return (
     <div className="min-h-screen flex flex-col" style={{ background: "var(--ts-bg)" }}>
+
+      <style>{`
+        @keyframes mq-spin {
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
 
       {/* Top bar */}
       <div
@@ -171,94 +198,112 @@ export default function ModuleQuiz({
           ) : (
 
             /* ── RESULTS ── */
-           <div>
-  <div className="mb-8">
-    <h1 className="text-2xl font-bold" style={{ color: "var(--ts-text)" }}>
-      Quiz Results
-    </h1>
-    <p style={{ color: "var(--ts-text-muted)" }}>Module {moduleOrder}</p>
-  </div>
+            <div>
+              <div className="mb-8">
+                <h1 className="text-2xl font-bold" style={{ color: "var(--ts-text)" }}>
+                  Quiz Results
+                </h1>
+                <p style={{ color: "var(--ts-text-muted)" }}>Module {moduleOrder}</p>
+              </div>
 
-  <div
-    className="rounded-2xl p-8 border mb-6"
-    style={{ background: "var(--ts-surface)", borderColor: "var(--ts-border)" }}
-  >
-    <p style={{ color: "var(--ts-text-muted)" }}>Your score</p>
-    <p style={{ color: "var(--ts-text)" }} className="text-5xl font-bold">
-      {moduleQuizScore}/{moduleQuizTotal}
-    </p>
+              <div
+                className="rounded-2xl p-8 border mb-6"
+                style={{ background: "var(--ts-surface)", borderColor: "var(--ts-border)" }}
+              >
+                <p style={{ color: "var(--ts-text-muted)" }}>Your score</p>
+                <p style={{ color: "var(--ts-text)" }} className="text-5xl font-bold">
+                  {moduleQuizScore}/{moduleQuizTotal}
+                </p>
 
-    <div
-      className="mt-4 px-4 py-3 rounded-xl"
-      style={{
-        background: passed ? "rgba(34,197,94,0.12)" : "rgba(239,68,68,0.12)",
-        color: passed ? "var(--ts-green)" : "#ef4444",
-      }}
-    >
-      {passed ? "✅ Passed" : "❌ Not passed"}
-    </div>
+                <div
+                  className="mt-4 px-4 py-3 rounded-xl"
+                  style={{
+                    background: passed ? "rgba(34,197,94,0.12)" : "rgba(239,68,68,0.12)",
+                    color: passed ? "var(--ts-green)" : "#ef4444",
+                  }}
+                >
+                  {passed ? "✅ Passed" : "❌ Not passed"}
+                </div>
 
-    {/* 🔥 ADD THIS BLOCK */}
-    {!passed && (
-      <div
-        className="mt-6 p-4 rounded-xl border"
-        style={{
-          background: "rgba(239,68,68,0.05)",
-          borderColor: "rgba(239,68,68,0.2)",
-          color: "var(--ts-text)",
-        }}
-      >
-        <p className="font-semibold mb-2">
-          Not quite there yet — but keep going 💪
-        </p>
+                {!passed && (
+                  <div
+                    className="mt-6 p-4 rounded-xl border"
+                    style={{
+                      background: "rgba(239,68,68,0.05)",
+                      borderColor: "rgba(239,68,68,0.2)",
+                      color: "var(--ts-text)",
+                    }}
+                  >
+                    <p className="font-semibold mb-2">
+                      Not quite there yet — but keep going 💪
+                    </p>
+                    <p className="text-sm mb-2" style={{ color: "var(--ts-text-muted)" }}>
+                      You didn't pass this module quiz this time. Revisit the concepts and
+                      strengthen your understanding.
+                    </p>
+                    <p className="text-sm mb-1">
+                      ⏳ Retry available after <strong>7 days</strong>
+                    </p>
+                    <p className="text-sm mb-1">
+                      🔒 Mega Quiz unlocks only after passing all modules
+                    </p>
+                    <p className="text-sm">
+                      🚀 Next module is unlocked — keep learning!
+                    </p>
+                  </div>
+                )}
+              </div>
 
-        <p className="text-sm mb-2" style={{ color: "var(--ts-text-muted)" }}>
-          You didn’t pass this module quiz this time. Revisit the concepts and
-          strengthen your understanding.
-        </p>
-
-        <p className="text-sm mb-1">
-          ⏳ Retry available after <strong>7 days</strong>
-        </p>
-
-        <p className="text-sm mb-1">
-          🔒 Mega Quiz unlocks only after passing all modules
-        </p>
-
-        <p className="text-sm">
-          🚀 Next module is unlocked — keep learning!
-        </p>
-      </div>
-    )}
-  </div>
-
-  <div className="flex justify-end">
-    {isLastModule ? (
-      <button
-        onClick={passed ? handleNextModule : undefined}
-        disabled={!passed}
-        className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold"
-        style={{
-          background: passed
-            ? "linear-gradient(90deg, var(--ts-violet), #06b6d4)"
-            : "rgba(128,128,128,0.4)",
-          color: "#fff",
-          cursor: passed ? "pointer" : "not-allowed",
-        }}
-      >
-        🚀 Take Mega Quiz
-      </button>
-    ) : (
-      <button
-        onClick={handleNextModule}
-        className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold cursor-pointer"
-        style={{ background: "var(--ts-violet)", color: "#fff" }}
-      >
-        Next Module →
-      </button>
-    )}
-  </div>
-</div>
+              <div className="flex justify-end">
+                {isLastModule ? (
+                  <button
+                    onClick={passed && !isNavigating ? handleNext : undefined}
+                    disabled={!passed || isNavigating}
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold"
+                    style={{
+                      background: passed
+                        ? "linear-gradient(90deg, var(--ts-violet), #06b6d4)"
+                        : "rgba(128,128,128,0.4)",
+                      color: "#fff",
+                      cursor: passed && !isNavigating ? "pointer" : "not-allowed",
+                      opacity: isNavigating ? 0.8 : 1,
+                      transition: "opacity 0.2s",
+                    }}
+                  >
+                    {isNavigating ? (
+                      <>
+                        {spinnerSvg}
+                        Loading…
+                      </>
+                    ) : (
+                      "🚀 Take Mega Quiz"
+                    )}
+                  </button>
+                ) : (
+                  <button
+                    onClick={!isNavigating ? handleNext : undefined}
+                    disabled={isNavigating}
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold"
+                    style={{
+                      background: "var(--ts-violet)",
+                      color: "#fff",
+                      cursor: isNavigating ? "not-allowed" : "pointer",
+                      opacity: isNavigating ? 0.8 : 1,
+                      transition: "opacity 0.2s",
+                    }}
+                  >
+                    {isNavigating ? (
+                      <>
+                        {spinnerSvg}
+                        Loading…
+                      </>
+                    ) : (
+                      "Next Module →"
+                    )}
+                  </button>
+                )}
+              </div>
+            </div>
           )}
 
         </div>
