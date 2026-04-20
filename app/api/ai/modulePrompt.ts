@@ -280,15 +280,16 @@ data:
   features:
   - <feature>
   - <feature>
-  visual_example: <example>
+  example: <example>
 - concept: <concept>
   features:
   - <feature>
   - <feature>
-  visual_example: <example>
+  example: <example>
 [/VISUAL]
 
-Each data list must have at least 2 items. Do not invent new types.
+ Do not invent new types.
+ No example must be diagrams but real world scenarios, names, numbers, or specific details.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 CHAPTER RULES

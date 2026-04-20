@@ -16,6 +16,7 @@ type ModuleQuizProps = {
   moduleOrder: string;
   onBack: () => void;
   isLastModule: boolean;
+  userPassed: boolean;
 };
 
 function getDaysLeft(retryAfter: number | null): number | null {
@@ -52,13 +53,9 @@ export default function ModuleQuiz({
   moduleOrder,
   onBack,
   isLastModule,
+  userPassed,
 }: ModuleQuizProps) {
   const [isNavigating, setIsNavigating] = useState(false);
-
-  const passed =
-    moduleQuizScore !== null &&
-    moduleQuizTotal !== null &&
-    moduleQuizScore >= moduleQuizTotal / 2;
 
   const daysLeft = getDaysLeft(retryAfter);
 
@@ -121,7 +118,7 @@ export default function ModuleQuiz({
                   Module {moduleOrder} Quiz
                 </h1>
                 <p style={{ color: "var(--ts-text-muted)" }}>
-                  {moduleQuiz.length} questions · Answer all to submit
+                  {moduleQuiz.length} questions · Answer all to submit · Pass mark: 50%
                 </p>
               </div>
 
@@ -214,18 +211,21 @@ export default function ModuleQuiz({
                 <p style={{ color: "var(--ts-text)" }} className="text-5xl font-bold">
                   {moduleQuizScore}/{moduleQuizTotal}
                 </p>
+                <p style={{ color: "var(--ts-text-muted)", fontSize: 13, marginTop: 4 }}>
+                  {Math.round((moduleQuizScore! / moduleQuizTotal!) * 100)}% · Pass mark: 50%
+                </p>
 
                 <div
                   className="mt-4 px-4 py-3 rounded-xl"
                   style={{
-                    background: passed ? "rgba(34,197,94,0.12)" : "rgba(239,68,68,0.12)",
-                    color: passed ? "var(--ts-green)" : "#ef4444",
+                    background: userPassed ? "rgba(34,197,94,0.12)" : "rgba(239,68,68,0.12)",
+                    color: userPassed ? "var(--ts-green)" : "#ef4444",
                   }}
                 >
-                  {passed ? "✅ Passed" : "❌ Not passed"}
+                  {userPassed ? "✅ Passed" : "❌ Not passed — score below 50%"}
                 </div>
 
-                {!passed && (
+                {!userPassed && (
                   <div
                     className="mt-6 p-4 rounded-xl border"
                     style={{
@@ -237,49 +237,77 @@ export default function ModuleQuiz({
                     <p className="font-semibold mb-2">
                       Not quite there yet — but keep going 💪
                     </p>
-                    <p className="text-sm mb-2" style={{ color: "var(--ts-text-muted)" }}>
-                      You didn't pass this module quiz this time. Revisit the concepts and
-                      strengthen your understanding.
+                    <p className="text-sm mb-3" style={{ color: "var(--ts-text-muted)" }}>
+                      You need 50% or more to pass. Revisit the chapters and strengthen your
+                      understanding before retaking.
                     </p>
-                    <p className="text-sm mb-1">
-                      ⏳ Retry available after <strong>7 days</strong>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      <p className="text-sm">⏳ Retake available after <strong>7 days</strong></p>
+                      <p className="text-sm">🔒 Mega Quiz unlocks only after passing all module quizzes</p>
+                      {!isLastModule && (
+                        <p className="text-sm">🚀 You can still continue to the next module</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {userPassed && isLastModule && (
+                  <div
+                    className="mt-6 p-4 rounded-xl border"
+                    style={{
+                      background: "rgba(167,139,250,0.08)",
+                      borderColor: "rgba(167,139,250,0.25)",
+                      color: "var(--ts-text)",
+                    }}
+                  >
+                    <p className="font-semibold mb-1" style={{ color: "var(--ts-violet)" }}>
+                      🎉 All modules complete!
                     </p>
-                    <p className="text-sm mb-1">
-                      🔒 Mega Quiz unlocks only after passing all modules
-                    </p>
-                    <p className="text-sm">
-                      🚀 Next module is unlocked — keep learning!
+                    <p className="text-sm" style={{ color: "var(--ts-text-muted)" }}>
+                      You've passed every module quiz. The Mega Quiz is now unlocked.
                     </p>
                   </div>
                 )}
               </div>
 
+              {/* Action button */}
               <div className="flex justify-end">
                 {isLastModule ? (
-                  <button
-                    onClick={passed && !isNavigating ? handleNext : undefined}
-                    disabled={!passed || isNavigating}
-                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold"
-                    style={{
-                      background: passed
-                        ? "linear-gradient(90deg, var(--ts-violet), #06b6d4)"
-                        : "rgba(128,128,128,0.4)",
-                      color: "#fff",
-                      cursor: passed && !isNavigating ? "pointer" : "not-allowed",
-                      opacity: isNavigating ? 0.8 : 1,
-                      transition: "opacity 0.2s",
-                    }}
-                  >
-                    {isNavigating ? (
-                      <>
-                        {spinnerSvg}
-                        Loading…
-                      </>
-                    ) : (
-                      "🚀 Take Mega Quiz"
-                    )}
-                  </button>
+                  // Last module: only show Mega Quiz button if passed, otherwise show locked message
+                  userPassed ? (
+                    <button
+                      onClick={!isNavigating ? handleNext : undefined}
+                      disabled={isNavigating}
+                      className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold"
+                      style={{
+                        background: "linear-gradient(90deg, var(--ts-violet), #06b6d4)",
+                        color: "#fff",
+                        cursor: isNavigating ? "not-allowed" : "pointer",
+                        opacity: isNavigating ? 0.8 : 1,
+                        transition: "opacity 0.2s",
+                      }}
+                    >
+                      {isNavigating ? (
+                        <>{spinnerSvg} Loading…</>
+                      ) : (
+                        "🚀 Take Mega Quiz"
+                      )}
+                    </button>
+                  ) : (
+                    <div
+                      style={{
+                        display: "flex", alignItems: "center", gap: 10,
+                        padding: "10px 16px", borderRadius: 12,
+                        background: "rgba(239,68,68,0.08)",
+                        border: "1px solid rgba(239,68,68,0.2)",
+                        color: "#ef4444", fontSize: 13, fontWeight: 600,
+                      }}
+                    >
+                      🔒 Pass this quiz to unlock the Mega Quiz
+                    </div>
+                  )
                 ) : (
+                  // Not last module: always allow navigating to next module regardless of pass/fail
                   <button
                     onClick={!isNavigating ? handleNext : undefined}
                     disabled={isNavigating}
@@ -293,10 +321,7 @@ export default function ModuleQuiz({
                     }}
                   >
                     {isNavigating ? (
-                      <>
-                        {spinnerSvg}
-                        Loading…
-                      </>
+                      <>{spinnerSvg} Loading…</>
                     ) : (
                       "Next Module →"
                     )}

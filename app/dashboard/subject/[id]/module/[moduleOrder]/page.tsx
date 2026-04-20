@@ -44,19 +44,19 @@ export default function ModulePage() {
   const [loading,     setLoading    ] = useState(true);
   const [error,       setError      ] = useState("");
 
-  const [quiz,                      setQuiz                     ] = useState<any[]>([]);
-  const [quizLoading,               setQuizLoading              ] = useState(false);
-  const [completedChapterQuizzes,   setCompletedChapterQuizzes  ] = useState<Set<number>>(new Set());
-  const [chapterQuizScores,         setChapterQuizScores        ] = useState<Record<number, { score: number; total: number }>>({});
+  const [quiz,                    setQuiz                   ] = useState<any[]>([]);
+  const [quizLoading,             setQuizLoading            ] = useState(false);
+  const [completedChapterQuizzes, setCompletedChapterQuizzes] = useState<Set<number>>(new Set());
+  const [chapterQuizScores,       setChapterQuizScores      ] = useState<Record<number, { score: number; total: number }>>({});
 
-  const [moduleQuiz,           setModuleQuiz          ] = useState<any[]>([]);
-  const [moduleQuizLoading,    setModuleQuizLoading   ] = useState(false);
-  const [moduleQuizAnswers,    setModuleQuizAnswers   ] = useState<{ [key: number]: string }>({});
-  const [moduleQuizScore,      setModuleQuizScore     ] = useState<number | null>(null);
-  const [moduleQuizTotal,      setModuleQuizTotal     ] = useState<number | null>(null);
-  const [moduleQuizResult,     setModuleQuizResult    ] = useState<any>(null);
-  const [showModuleQuiz,       setShowModuleQuiz      ] = useState(false);
-  const [moduleQuizAlreadyDone,setModuleQuizAlreadyDone] = useState(false);
+  const [moduleQuiz,            setModuleQuiz           ] = useState<any[]>([]);
+  const [moduleQuizLoading,     setModuleQuizLoading    ] = useState(false);
+  const [moduleQuizAnswers,     setModuleQuizAnswers    ] = useState<{ [key: number]: string }>({});
+  const [moduleQuizScore,       setModuleQuizScore      ] = useState<number | null>(null);
+  const [moduleQuizTotal,       setModuleQuizTotal      ] = useState<number | null>(null);
+  const [moduleQuizResult,      setModuleQuizResult     ] = useState<any>(null);
+  const [showModuleQuiz,        setShowModuleQuiz       ] = useState(false);
+  const [moduleQuizAlreadyDone, setModuleQuizAlreadyDone] = useState(false);
 
   const [nextModuleReady,   setNextModuleReady  ] = useState(false);
   const [nextModuleIsLast,  setNextModuleIsLast ] = useState(false);
@@ -65,8 +65,9 @@ export default function ModulePage() {
   const [generatingNext,    setGeneratingNext   ] = useState(false);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  const [isMobile, setIsMobile] = useState(false);
+  const [isMobile,         setIsMobile        ] = useState(false);
   const [showMobileDrawer, setShowMobileDrawer] = useState(false);
+  const [profile,          setProfile         ] = useState<{ visual: number; audio: number; text: number }>({ visual: 33, audio: 33, text: 34 });
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
@@ -75,7 +76,18 @@ export default function ModulePage() {
     return () => window.removeEventListener("resize", check);
   }, []);
 
-  // Close drawer on chapter select (mobile)
+  useEffect(() => {
+    async function fetchProfile() {
+      try {
+        const res  = await fetch("/api/user/profile");
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.profile) setProfile(data.profile);
+      } catch (err) { console.error("Failed to load profile", err); }
+    }
+    fetchProfile();
+  }, []);
+
   function selectChapter(i: number) {
     setActiveIndex(i);
     setShowMobileDrawer(false);
@@ -137,7 +149,8 @@ export default function ModulePage() {
             setModuleQuizScore(data.score);
             setModuleQuizTotal(data.total);
             setModuleQuizAlreadyDone(true);
-            checkNextModuleReady();
+            const pct = data.score / data.total;
+            if (pct >= 0.5) checkNextModuleReady();
           }
         }
       } catch (err) { console.error("Failed to load module quiz progress", err); }
@@ -227,14 +240,13 @@ export default function ModulePage() {
         body: JSON.stringify({
           moduleTitle: `Module ${moduleOrder}`,
           topics: chapters.map(c => c.title),
-          profile: { visual: 40, audio: 20, text: 40 },
+          profile,
           subjectId,
           moduleOrder: Number(moduleOrder),
         }),
       });
       if (res.status === 401) { router.push("/login"); return; }
       const data = await res.json();
-      console.log("moduleQuiz POST response:", data);
       setModuleQuiz(data.mcqs || []);
       setModuleQuizAnswers({});
     } catch (err) { console.error("Module quiz fetch failed", err); }
@@ -244,7 +256,7 @@ export default function ModulePage() {
   async function submitModuleQuiz() {
     let correct = 0;
     moduleQuiz.forEach((q: any, i: number) => {
-      const idx  = ["A","B","C","D"].indexOf(q.answer);
+      const idx = ["A","B","C","D"].indexOf(q.answer);
       if (moduleQuizAnswers[i] === q.options[idx]) correct++;
     });
     setModuleQuizScore(correct);
@@ -253,13 +265,16 @@ export default function ModulePage() {
       const res = await fetch("/api/moduleQuiz/score", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ subjectId, moduleOrder, score: correct, total: moduleQuiz.length, profile: { visual: 40, audio: 20, text: 40 }, quiz: moduleQuiz }),
+        body: JSON.stringify({ subjectId, moduleOrder, score: correct, total: moduleQuiz.length, profile, quiz: moduleQuiz }),
       });
       if (res.status === 401) { router.push("/login"); return; }
       const data = await res.json();
       setModuleQuizResult(data);
       setModuleQuizAlreadyDone(true);
-      startPollingNextModule();
+      const pct = moduleQuiz.length > 0 ? correct / moduleQuiz.length : 0;
+      if (pct >= 0.5) {
+        startPollingNextModule();
+      }
     } catch (err) { console.error("Score save failed", err); }
   }
 
@@ -268,8 +283,7 @@ export default function ModulePage() {
     try {
       const res  = await fetch(`/api/moduleReady?subjectId=${subjectId}&moduleOrder=${nextOrder}`);
       const data = await res.json();
-      if (data.isLast)  { router.push(`/dashboard/subject/${subjectId}/mega`); // ← was alert(), now navigates
-      return;}
+      if (data.isLast)  { router.push(`/dashboard/subject/${subjectId}/mega`); return; }
       if (data.ready)   { router.push(`/dashboard/subject/${subjectId}/module/${nextOrder}`); return; }
       setGeneratingNext(true);
       const genRes = await fetch("/api/ai/generateModule", {
@@ -281,6 +295,11 @@ export default function ModulePage() {
       router.push(`/dashboard/subject/${subjectId}/module/${nextOrder}`);
     } catch (err) { console.error("Next module error:", err); alert("Something went wrong"); setGeneratingNext(false); }
   }
+
+  const moduleQuizPassed =
+    moduleQuizScore !== null &&
+    moduleQuizTotal !== null &&
+    moduleQuizScore / moduleQuizTotal >= 0.5;
 
   if (loading) {
     return (
@@ -315,6 +334,7 @@ export default function ModulePage() {
         moduleOrder={moduleOrder}
         onBack={() => setShowModuleQuiz(false)}
         isLastModule={nextModuleIsLast}
+        userPassed={moduleQuizPassed}
       />
     );
   }
@@ -323,10 +343,8 @@ export default function ModulePage() {
     ? Math.round((completedChapterQuizzes.size / chapters.length) * 100)
     : 0;
 
-  /* ── Sidebar content (shared between desktop sidebar and mobile drawer) ── */
   const SidebarContent = ({ onSelectChapter }: { onSelectChapter: (i: number) => void }) => (
     <>
-      {/* Navigation buttons */}
       <div style={{ padding: "16px 12px 12px", borderBottom: "1px solid var(--ts-border)", display: "flex", flexDirection: "column", gap: 4 }}>
         <button className="mp-back-btn" onClick={() => router.push("/dashboard")}>
           <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} style={{ flexShrink: 0 }}>
@@ -342,7 +360,6 @@ export default function ModulePage() {
         </button>
       </div>
 
-      {/* Contents header */}
       <div style={{ padding: "14px 16px 10px", borderBottom: "1px solid var(--ts-border)" }}>
         <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--ts-text-dim)", marginBottom: 4 }}>
           Contents
@@ -352,11 +369,10 @@ export default function ModulePage() {
         </p>
       </div>
 
-      {/* Chapter list */}
       <nav style={{ flex: 1, overflowY: "auto", padding: "10px 8px", display: "flex", flexDirection: "column", gap: 2 }}>
         {chapters.map((chapter, i) => {
-          const isDone   = completedChapterQuizzes.has(i);
-          const isActive = activeIndex === i;
+          const isDone    = completedChapterQuizzes.has(i);
+          const isActive  = activeIndex === i;
           const scoreData = chapterQuizScores[i];
           return (
             <button
@@ -391,7 +407,6 @@ export default function ModulePage() {
           );
         })}
 
-        {/* Module Quiz section */}
         <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid var(--ts-border)" }}>
           <p className="mp-section-label">Module Quiz</p>
 
@@ -402,7 +417,9 @@ export default function ModulePage() {
                   <div style={{ position: "relative", width: 36, height: 36, flexShrink: 0 }}>
                     <svg width="36" height="36" viewBox="0 0 36 36" style={{ transform: "rotate(-90deg)" }}>
                       <circle cx="18" cy="18" r="14" fill="none" stroke="var(--ts-border)" strokeWidth="3" />
-                      <circle cx="18" cy="18" r="14" fill="none" stroke="var(--ts-green)" strokeWidth="3"
+                      <circle cx="18" cy="18" r="14" fill="none"
+                        stroke={moduleQuizPassed ? "var(--ts-green)" : "#ef4444"}
+                        strokeWidth="3"
                         strokeDasharray={`${(moduleQuizScore! / moduleQuizTotal!) * 88} 88`}
                         strokeLinecap="round"
                         style={{ transition: "stroke-dasharray 0.6s ease" }}
@@ -411,17 +428,18 @@ export default function ModulePage() {
                     <span style={{
                       position: "absolute", inset: 0, pointerEvents: "none",
                       display: "flex", alignItems: "center", justifyContent: "center",
-                      fontSize: 9, fontWeight: 700, color: "var(--ts-green)",
+                      fontSize: 9, fontWeight: 700,
+                      color: moduleQuizPassed ? "var(--ts-green)" : "#ef4444",
                     }}>
                       {Math.round((moduleQuizScore! / moduleQuizTotal!) * 100)}%
                     </span>
                   </div>
                   <div>
-                    <p style={{ fontSize: 12, fontWeight: 700, color: "var(--ts-green)", margin: 0 }}>
+                    <p style={{ fontSize: 12, fontWeight: 700, color: moduleQuizPassed ? "var(--ts-green)" : "#ef4444", margin: 0 }}>
                       {moduleQuizScore}/{moduleQuizTotal} correct
                     </p>
                     <p style={{ fontSize: 10, color: "var(--ts-text-muted)", margin: "2px 0 0" }}>
-                      Module quiz done
+                      {moduleQuizPassed ? "Passed ✓" : "Not passed"}
                     </p>
                   </div>
                 </div>
@@ -488,7 +506,6 @@ export default function ModulePage() {
         </div>
       </nav>
 
-      {/* Progress footer */}
       <div style={{ padding: "14px 16px", borderTop: "1px solid var(--ts-border)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
           <span style={{ fontSize: 11, fontWeight: 600, color: "var(--ts-text-dim)", textTransform: "uppercase", letterSpacing: "0.08em" }}>Progress</span>
@@ -569,22 +586,14 @@ export default function ModulePage() {
         }
         .mp-quiz-cta:hover { background: var(--ts-violet-bubble); box-shadow: 0 0 14px var(--ts-violet-glow); }
 
-        /* Mobile top bar */
         .mp-mobile-topbar {
           display: none;
-          position: sticky;
-          top: 0;
-          z-index: 40;
-          background: var(--ts-surface);
-          border-bottom: 1px solid var(--ts-border);
-          padding: 0 16px;
-          height: 52px;
-          align-items: center;
-          justify-content: space-between;
-          gap: 12px;
+          position: sticky; top: 0; z-index: 40;
+          background: var(--ts-surface); border-bottom: 1px solid var(--ts-border);
+          padding: 0 16px; height: 52px;
+          align-items: center; justify-content: space-between; gap: 12px;
         }
 
-        /* Mobile drawer overlay */
         .mp-drawer-overlay {
           position: fixed; inset: 0; background: rgba(0,0,0,0.5);
           z-index: 100; backdrop-filter: blur(2px);
@@ -614,12 +623,12 @@ export default function ModulePage() {
 
       <div style={{ display: "flex", height: "100vh", overflow: "hidden", background: "var(--ts-bg)", fontFamily: "'Space Grotesk', sans-serif" }}>
 
-        {/* ══ DESKTOP SIDEBAR ══ */}
+        {/* DESKTOP SIDEBAR */}
         <div className="mp-desktop-sidebar" style={{ width: 280, flexShrink: 0, display: "flex", flexDirection: "column", overflow: "hidden", background: "var(--ts-surface)", borderRight: "1px solid var(--ts-border)" }}>
           <SidebarContent onSelectChapter={setActiveIndex} />
         </div>
 
-        {/* ══ MAIN SCROLL AREA ══ */}
+        {/* MAIN SCROLL AREA */}
         <main style={{ flex: 1, overflowY: "auto", background: "var(--ts-bg)", display: "flex", flexDirection: "column" }}>
 
           {/* Mobile Top Bar */}
@@ -636,7 +645,6 @@ export default function ModulePage() {
               Back
             </button>
 
-            {/* Progress pill */}
             <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 8 }}>
               <div style={{ flex: 1, height: 4, background: "var(--ts-surface-hi)", borderRadius: 99, overflow: "hidden" }}>
                 <div style={{
@@ -648,7 +656,6 @@ export default function ModulePage() {
               <span style={{ fontSize: 11, fontWeight: 700, color: "var(--ts-violet)", whiteSpace: "nowrap" }}>{progressPct}%</span>
             </div>
 
-            {/* Chapters menu button */}
             <button onClick={() => setShowMobileDrawer(true)} style={{
               background: "var(--ts-surface-hi)", border: "1px solid var(--ts-border)",
               borderRadius: 8, padding: "6px 10px", cursor: "pointer",
@@ -666,7 +673,6 @@ export default function ModulePage() {
           {chapters[activeIndex] && (
             <div className="mp-main-content" style={{ maxWidth: 800, margin: "0 auto", padding: "48px 40px 80px", width: "100%", boxSizing: "border-box" }}>
 
-              {/* Chapter header */}
               <div style={{ marginBottom: 32, paddingBottom: 24, borderBottom: "1px solid var(--ts-border)" }}>
                 <span style={{
                   display: "inline-block", fontSize: 10, fontWeight: 700,
@@ -687,17 +693,15 @@ export default function ModulePage() {
                 </h1>
               </div>
 
-              {/* Content */}
               <MarkdownRenderer
                 content={chapters[activeIndex].content}
-                profile={{ visual: 40, audio: 20, text: 40 }}
+                profile={profile}
                 moduleId={String(moduleOrder)}
                 subjectId={subjectId}
                 quiz={quizLoading ? [] : quiz}
                 onQuizComplete={handleChapterQuizComplete}
               />
 
-              {/* Completed notice */}
               {completedChapterQuizzes.has(activeIndex) && (
                 <div style={{
                   marginTop: 32, padding: "16px 20px", borderRadius: 14,
@@ -714,7 +718,6 @@ export default function ModulePage() {
                 </div>
               )}
 
-              {/* Quiz generating */}
               {quizLoading && (
                 <div style={{
                   marginTop: 32, padding: "18px 20px", borderRadius: 14,
@@ -754,11 +757,13 @@ export default function ModulePage() {
                     <button onClick={() => setShowModuleQuiz(true)} style={{
                       display: "flex", alignItems: "center", gap: 8,
                       padding: "10px 16px", borderRadius: 10,
-                      border: "1px solid var(--ts-green-border)", background: "var(--ts-green-soft)",
-                      color: "var(--ts-green)", fontSize: 13, fontWeight: 600, cursor: "pointer",
+                      border: `1px solid ${moduleQuizPassed ? "var(--ts-green-border)" : "rgba(239,68,68,0.3)"}`,
+                      background: moduleQuizPassed ? "var(--ts-green-soft)" : "rgba(239,68,68,0.08)",
+                      color: moduleQuizPassed ? "var(--ts-green)" : "#ef4444",
+                      fontSize: 13, fontWeight: 600, cursor: "pointer",
                       fontFamily: "'Space Grotesk', sans-serif",
                     }}>
-                      ✓ Module Quiz — {moduleQuizScore}/{moduleQuizTotal}
+                      {moduleQuizPassed ? "✓" : "✗"} Module Quiz — {moduleQuizScore}/{moduleQuizTotal}
                     </button>
                   )}
 
@@ -804,7 +809,7 @@ export default function ModulePage() {
           )}
         </main>
 
-        {/* ══ MOBILE DRAWER ══ */}
+        {/* MOBILE DRAWER */}
         {showMobileDrawer && (
           <>
             <div className="mp-drawer-overlay" onClick={() => setShowMobileDrawer(false)} />

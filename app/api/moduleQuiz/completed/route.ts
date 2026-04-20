@@ -22,11 +22,16 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Missing subjectId" }, { status: 400 });
     }
     const result = await pool.query(
-      `SELECT COUNT(*) FROM module_quiz WHERE subject_id = $1 AND user_id = $2 AND score IS NOT NULL`,
+      `SELECT 
+        COUNT(*) AS completed,
+        COUNT(*) FILTER (WHERE score::float / NULLIF(total, 0) >= 0.5) AS passed
+       FROM module_quiz 
+       WHERE subject_id = $1 AND user_id = $2 AND score IS NOT NULL`,
       [subjectId, userId]
     );
-    const completed = parseInt(result.rows[0].count, 10);
-    return NextResponse.json({ completed });
+    const completed = parseInt(result.rows[0].completed, 10);
+    const passed    = parseInt(result.rows[0].passed,    10);
+    return NextResponse.json({ completed, passed });
   } catch (err) {
     return NextResponse.json({ error: "Failed to fetch completed modules" }, { status: 500 });
   }

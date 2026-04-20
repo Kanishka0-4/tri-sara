@@ -12,7 +12,7 @@ const pool = new Pool({
 /* ---------------- GROQ ---------------- */
 
 const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY!,
+  apiKey: process.env.GROQ_API_KEY_1!,
 });
 
 /* ---------------- GENERATE MODULE ---------------- */

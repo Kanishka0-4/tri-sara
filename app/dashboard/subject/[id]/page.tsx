@@ -21,23 +21,23 @@ type Subject = {
 };
 
 const C = {
-  bgSecondary: "var(--ts-bg-secondary)",
-  surface:     "var(--ts-surface)",
-  surfaceHi:   "var(--ts-surface-hi)",
-  border:      "var(--ts-border)",
-  borderHi:    "var(--ts-border-hi)",
-  violet:      "var(--ts-violet)",
-  violetGlow:  "var(--ts-violet-glow)",
-  violetSoft:  "var(--ts-violet-soft)",
-  violetBubble:"var(--ts-violet-bubble)",
-  cyan:        "var(--ts-cyan)",
-  cyanGlow:    "var(--ts-cyan-glow)",
-  rose:        "var(--ts-rose)",
-  roseSoft:    "var(--ts-rose-soft)",
-  green:       "var(--ts-green)",
-  text:        "var(--ts-text)",
-  muted:       "var(--ts-text-muted)",
-  dim:         "var(--ts-text-dim)",
+  bgSecondary:  "var(--ts-bg-secondary)",
+  surface:      "var(--ts-surface)",
+  surfaceHi:    "var(--ts-surface-hi)",
+  border:       "var(--ts-border)",
+  borderHi:     "var(--ts-border-hi)",
+  violet:       "var(--ts-violet)",
+  violetGlow:   "var(--ts-violet-glow)",
+  violetSoft:   "var(--ts-violet-soft)",
+  violetBubble: "var(--ts-violet-bubble)",
+  cyan:         "var(--ts-cyan)",
+  cyanGlow:     "var(--ts-cyan-glow)",
+  rose:         "var(--ts-rose)",
+  roseSoft:     "var(--ts-rose-soft)",
+  green:        "var(--ts-green)",
+  text:         "var(--ts-text)",
+  muted:        "var(--ts-text-muted)",
+  dim:          "var(--ts-text-dim)",
 };
 
 function getAccentHex(i: number) {
@@ -94,13 +94,57 @@ function MegaQuizBanner({ onClick }: { onClick:()=>void }) {
         <motion.div animate={{rotate:[0,10,-10,0],scale:[1,1.15,1]}} transition={{duration:2.5,repeat:Infinity,ease:"easeInOut"}} style={{fontSize:32,lineHeight:1}}>🚀</motion.div>
         <div>
           <div style={{display:"inline-flex",alignItems:"center",gap:6,background:"var(--ts-violet-soft)",border:"1px solid var(--ts-border-hi)",borderRadius:999,padding:"3px 10px",marginBottom:6}}>
-            <span style={{fontSize:9,fontWeight:700,letterSpacing:"0.14em",textTransform:"uppercase",color:"var(--ts-violet)"}}>All modules complete</span>
+            <span style={{fontSize:9,fontWeight:700,letterSpacing:"0.14em",textTransform:"uppercase",color:"var(--ts-violet)"}}>All modules passed</span>
           </div>
           <h3 style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"clamp(1rem,2.5vw,1.2rem)",fontWeight:700,color:"var(--ts-text)",margin:0,lineHeight:1.2}}>Take the Mega Quiz</h3>
           <p style={{fontSize:13,color:"var(--ts-text-muted)",margin:"4px 0 0",lineHeight:1.5}}>Final assessment across all modules — show what you've learned.</p>
         </div>
       </div>
       <motion.div whileHover={{x:4}} style={{display:"flex",alignItems:"center",gap:8,padding:"10px 20px",borderRadius:12,background:"linear-gradient(135deg,var(--ts-violet),#818cf8)",color:"#fff",fontSize:13,fontWeight:700,fontFamily:"'Space Grotesk',sans-serif",boxShadow:"0 0 20px var(--ts-violet-glow)",flexShrink:0,position:"relative",zIndex:1,whiteSpace:"nowrap"}}>Start ✦</motion.div>
+    </motion.div>
+  );
+}
+
+function MegaQuizLocked({ passedCount, total }: { passedCount: number; total: number }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+      style={{
+        marginBottom: 40,
+        padding: "20px 24px",
+        borderRadius: 16,
+        background: C.surface,
+        border: `1px solid ${C.border}`,
+        display: "flex",
+        alignItems: "center",
+        gap: 16,
+        flexWrap: "wrap",
+      }}
+    >
+      <span style={{ fontSize: 24, flexShrink: 0 }}>🔒</span>
+      <div style={{ flex: 1, minWidth: 160 }}>
+        <p style={{ fontSize: 14, fontWeight: 700, color: C.text, margin: 0 }}>
+          Mega Quiz locked
+        </p>
+        <p style={{ fontSize: 13, color: C.muted, margin: "4px 0 0" }}>
+          Pass all module quizzes (50%+) to unlock the final assessment.{" "}
+          <span style={{ color: C.violet, fontWeight: 600 }}>
+            {passedCount}/{total} passed
+          </span>
+        </p>
+      </div>
+      <div style={{ flex: 1, minWidth: 80, height: 4, background: C.surfaceHi, borderRadius: 99, overflow: "hidden" }}>
+        <div style={{
+          height: "100%",
+          borderRadius: 99,
+          background: `linear-gradient(90deg, ${C.violet}, ${C.cyan})`,
+          width: `${total > 0 ? (passedCount / total) * 100 : 0}%`,
+          transition: "width 0.5s ease",
+          boxShadow: `0 0 8px ${C.violetGlow}`,
+        }} />
+      </div>
     </motion.div>
   );
 }
@@ -153,7 +197,6 @@ function ModuleCard({ mod, index, subjectId, router, prevTitle }: {
       </AnimatePresence>
 
       {isLocked ? (
-        /* ── LOCKED ── */
         <div style={{
           position:"absolute",inset:0,borderRadius:16,padding:"20px 18px",
           background:"var(--ts-surface)",border:`1px solid var(--ts-border)`,
@@ -168,12 +211,11 @@ function ModuleCard({ mod, index, subjectId, router, prevTitle }: {
           </div>
           <h3 style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:14,fontWeight:700,color:"var(--ts-text-dim)",paddingTop:8,margin:0,lineHeight:1.35}}>{mod.title}</h3>
           <p style={{fontSize:12,color:"var(--ts-text-dim)",margin:0,lineHeight:1.55,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical" as const,overflow:"hidden"}}>{mod.goal}</p>
-          {/* hatch pattern */}
           <div style={{position:"absolute",inset:0,borderRadius:16,background:"repeating-linear-gradient(45deg,transparent,transparent 8px,rgba(255,255,255,0.015) 8px,rgba(255,255,255,0.015) 16px)",pointerEvents:"none"}} />
         </div>
       ) : (
         <>
-          {/* ── FRONT ── */}
+          {/* FRONT */}
           <motion.div animate={{opacity:flipped?0:1,y:flipped?-4:0}} transition={{duration:0.22}} style={{
             position:"absolute",inset:0,borderRadius:16,padding:"20px 18px",
             background:mod.isCompleted?"rgba(34,197,94,0.08)":C.surface,
@@ -191,7 +233,7 @@ function ModuleCard({ mod, index, subjectId, router, prevTitle }: {
             <p style={{fontSize:12,color:C.muted,margin:0,lineHeight:1.55,display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical" as const,overflow:"hidden"}}>{mod.goal}</p>
           </motion.div>
 
-          {/* ── BACK ── */}
+          {/* BACK */}
           <motion.div animate={{opacity:flipped?1:0,y:flipped?0:6}} transition={{duration:0.22}} style={{
             position:"absolute",inset:0,background:C.bgSecondary,
             backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)",
@@ -217,19 +259,19 @@ function ModuleCard({ mod, index, subjectId, router, prevTitle }: {
   );
 }
 
-/* ─── Main ───────────────────────────────────────────────────── */
 export default function SubjectLandingPage() {
   const params = useParams();
   const router = useRouter();
   const id = typeof params.id==="string"?params.id:Array.isArray(params.id)?params.id[0]:null;
 
-  const [subject,         setSubject        ] = useState<Subject|null>(null);
-  const [modules,         setModules        ] = useState<Module[]>([]);
-  const [loading,         setLoading        ] = useState(true);
-  const [error,           setError          ] = useState("");
-  const [theme,           setTheme          ] = useState("dark");
-  const [megaEligible,    setMegaEligible   ] = useState(false);
-  const [megaAlreadyDone, setMegaAlreadyDone] = useState(false);
+  const [subject,          setSubject         ] = useState<Subject|null>(null);
+  const [modules,          setModules         ] = useState<Module[]>([]);
+  const [loading,          setLoading         ] = useState(true);
+  const [error,            setError           ] = useState("");
+  const [theme,            setTheme           ] = useState("dark");
+  const [megaEligible,     setMegaEligible    ] = useState(false);
+  const [megaAlreadyDone,  setMegaAlreadyDone ] = useState(false);
+  const [passedCount,      setPassedCount     ] = useState(0);
 
   useEffect(()=>{
     const saved=localStorage.getItem("trisara-theme");
@@ -255,17 +297,23 @@ export default function SubjectLandingPage() {
         const data=await sRes.json();
         setSubject(data.subject);
 
-        let completedCount=0;
-        if(cRes.ok){const cd=await cRes.json();completedCount=cd.completed||0;}
+        let completedCount = 0;
+        let passed         = 0;
+        if(cRes.ok){
+          const cd    = await cRes.json();
+          completedCount  = cd.completed || 0;
+          passed          = cd.passed    || 0;
+        }
+        setPassedCount(passed);
 
-        // Lock: module i is locked if the previous module (i-1) is not completed
-        const mods:Module[]=(data.modules||[]).map((m:Module,i:number)=>({
+        const mods: Module[] = (data.modules || []).map((m: Module, i: number) => ({
           ...m,
-          isCompleted: i<completedCount,
-          isLocked: i>0 && (i-1)>=completedCount,
+          isCompleted: i < completedCount,
+          isLocked:    i > 0 && (i - 1) >= completedCount,
         }));
         setModules(mods);
-        setMegaEligible(mods.length>0&&mods.every(m=>m.isCompleted));
+        setMegaEligible(mods.length > 0 && passed === mods.length);
+
         if(mRes.ok){const md=await mRes.json();if(md?.analytics)setMegaAlreadyDone(true);}
       } catch(err){console.error(err);setError("Unable to load subject");}
       finally{setLoading(false);}
@@ -280,9 +328,10 @@ export default function SubjectLandingPage() {
     </div>
   );
 
-  const showMegaBanner=megaEligible&&!megaAlreadyDone;
-  const completedCount=modules.filter(m=>m.isCompleted).length;
-  const progressPct=modules.length>0?Math.round((completedCount/modules.length)*100):0;
+  const showMegaBanner  = megaEligible && !megaAlreadyDone;
+  const showMegaLocked  = !megaEligible && !megaAlreadyDone && modules.length > 0;
+  const completedCount  = modules.filter(m => m.isCompleted).length;
+  const progressPct     = modules.length > 0 ? Math.round((completedCount / modules.length) * 100) : 0;
 
   return (
     <>
@@ -328,8 +377,13 @@ export default function SubjectLandingPage() {
             {megaAlreadyDone&&<ActionButton icon="🏆" label="Mega Quiz Results" onClick={()=>router.push(`/dashboard/subject/${id}/mega`)} />}
           </motion.div>
 
-          <AnimatePresence>
-            {showMegaBanner&&<MegaQuizBanner onClick={()=>router.push(`/dashboard/subject/${id}/mega`)} />}
+          <AnimatePresence mode="wait">
+            {showMegaBanner && (
+              <MegaQuizBanner key="banner" onClick={() => router.push(`/dashboard/subject/${id}/mega`)} />
+            )}
+            {showMegaLocked && (
+              <MegaQuizLocked key="locked" passedCount={passedCount} total={modules.length} />
+            )}
           </AnimatePresence>
 
           <section>
