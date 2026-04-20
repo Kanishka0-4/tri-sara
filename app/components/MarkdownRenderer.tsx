@@ -406,7 +406,7 @@ export default function MarkdownRenderer({
                       subjectId={subjectId}
                     />
                     {/* Sectional TTS: reads this takeaways block aloud */}
-                    <AudioRenderer block={part.content.trim()} />
+                    <AudioRenderer block={part.content.trim()} moduleId={moduleId} subjectId={subjectId} />
                   </div>
                 </div>
               ) : (
@@ -419,7 +419,7 @@ export default function MarkdownRenderer({
                     subjectId={subjectId}
                   />
                   {/* Sectional TTS: reads this text block aloud inline */}
-                  <AudioRenderer block={part.content.trim()} />
+                  <AudioRenderer block={part.content.trim()} moduleId={moduleId} subjectId={subjectId} />
                 </div>
               )}
             </FadeIn>
@@ -437,7 +437,8 @@ export default function MarkdownRenderer({
           <FadeIn delay={200}>
             <div className="md-audio-block md-narration-block">
               <div className="md-narration-label">Chapter Narration</div>
-              <AudioRenderer block={chapterAudioContent} variant="chapter" />
+              <AudioRenderer block={chapterAudioContent} variant="chapter" moduleId={moduleId} subjectId={subjectId} />
+
             </div>
           </FadeIn>
         )}

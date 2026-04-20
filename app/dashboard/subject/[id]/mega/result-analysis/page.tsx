@@ -168,10 +168,33 @@ export default function MegaQuizResultAnalysisPage() {
   const router = useRouter();
   const subjectId = params.id as string;
 
-  const [data, setData]       = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState("");
-  const [theme, setTheme]     = useState("dark");
+  const [data, setData]             = useState<any>(null);
+  const [loading, setLoading]       = useState(true);
+  const [error, setError]           = useState("");
+  const [theme, setTheme]           = useState("dark");
+  const [retryStatus, setRetryStatus] = useState<{
+    canRetake: boolean;
+    completedAt: string | null;
+    retryAfter: string | null;
+  } | null>(null);
+  const [timeStr, setTimeStr] = useState("");
+
+  // Live countdown ticker
+  useEffect(() => {
+    if (!retryStatus?.retryAfter) return;
+    const tick = () => {
+      const ms = new Date(retryStatus.retryAfter!).getTime() - Date.now();
+      if (ms <= 0) { setTimeStr("0h 0m"); return; }
+      const totalMins = Math.ceil(ms / 60000);
+      const days  = Math.floor(totalMins / (60 * 24));
+      const hours = Math.floor((totalMins % (60 * 24)) / 60);
+      const mins  = totalMins % 60;
+      setTimeStr(days > 0 ? `${days}d ${hours}h` : hours > 0 ? `${hours}h ${mins}m` : `${mins}m`);
+    };
+    tick();
+    const id = setInterval(tick, 60000);
+    return () => clearInterval(id);
+  }, [retryStatus?.retryAfter]);
 
   /* Theme (default dark, same as other pages) */
   useEffect(() => {
@@ -192,17 +215,26 @@ export default function MegaQuizResultAnalysisPage() {
       setLoading(true);
       setError("");
       try {
-        const res = await fetch("/api/mega-quiz/analytics/summary", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ subjectId }),
-        });
-        const result = await res.json();
-        if (res.ok && result?.summary) {
+        const [summaryRes, retryRes] = await Promise.all([
+          fetch("/api/mega-quiz/analytics/summary", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ subjectId }),
+          }),
+          fetch("/api/mega-quiz/retry-status", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ subjectId }),
+          }),
+        ]);
+        const result    = await summaryRes.json();
+        const retryData = await retryRes.json();
+        if (summaryRes.ok && result?.summary) {
           setData(result.summary);
         } else {
           setError(result.error || "No summary found.");
         }
+        if (!retryData.error) setRetryStatus(retryData);
       } catch {
         setError("Failed to load summary.");
       }
@@ -344,6 +376,74 @@ export default function MegaQuizResultAnalysisPage() {
 
             </div>
           )}
+
+          {/* ── Retry status banner ── */}
+          {retryStatus && (
+            <motion.div
+              initial={{ opacity:0, y:16 }} animate={{ opacity:1, y:0 }}
+              transition={{ delay:0.4, duration:0.4 }}
+              style={{
+                marginTop: 24, borderRadius: 16, padding: "20px 24px",
+                background: retryStatus.canRetake ? C.greenSoft : C.amberSoft,
+                border: `1px solid ${retryStatus.canRetake ? C.greenBorder : C.amberBorder}`,
+                display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap",
+              }}
+            >
+              <span style={{ fontSize: 28 }}>{retryStatus.canRetake ? "✅" : "⏳"}</span>
+              <div style={{ flex: 1 }}>
+                {retryStatus.canRetake ? (
+                  <>
+                    <p style={{ fontSize:13, fontWeight:700, color:C.green, margin:0 }}>Retake available!</p>
+                    <p style={{ fontSize:12, color:C.muted, margin:"4px 0 0" }}>
+                      2 days have passed since your last attempt. Head back to take the quiz again.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p style={{ fontSize:13, fontWeight:700, color:C.amber, margin:0 }}>
+                      Retake available in {timeStr}
+                    </p>
+                    <p style={{ fontSize:12, color:C.muted, margin:"4px 0 0" }}>
+                      Last attempt: {retryStatus.completedAt ? new Date(retryStatus.completedAt).toLocaleString(undefined, { dateStyle:"medium", timeStyle:"short" }) : "—"}
+                      {" · "}You can retake 2 days after your last attempt.
+                    </p>
+                    {retryStatus.completedAt && retryStatus.retryAfter && (() => {
+                      const total   = new Date(retryStatus.retryAfter).getTime() - new Date(retryStatus.completedAt).getTime();
+                      const elapsed = Date.now() - new Date(retryStatus.completedAt).getTime();
+                      const pct     = Math.min(100, Math.round((elapsed / total) * 100));
+                      return (
+                        <div style={{ marginTop:10 }}>
+                          <div style={{ height:4, background:C.border, borderRadius:99, overflow:"hidden" }}>
+                            <motion.div
+                              initial={{ width:0 }} animate={{ width:`${pct}%` }}
+                              transition={{ duration:0.8 }}
+                              style={{ height:"100%", borderRadius:99, background:C.amber, boxShadow:`0 0 8px ${C.amber}` }}
+                            />
+                          </div>
+                          <p style={{ fontSize:10, color:C.dim, marginTop:4, textAlign:"right" }}>{pct}% of wait time elapsed</p>
+                        </div>
+                      );
+                    })()}
+                  </>
+                )}
+              </div>
+              {retryStatus.canRetake && (
+                <button
+                  onClick={() => router.push(`/dashboard/subject/${subjectId}/mega`)}
+                  style={{
+                    padding:"10px 22px", borderRadius:10, border:"none",
+                    background:`linear-gradient(135deg,${C.violet},#818cf8)`,
+                    color:"#0d0918", fontSize:13, fontWeight:700, cursor:"pointer",
+                    fontFamily:"'Space Grotesk',sans-serif",
+                    boxShadow:`0 0 16px ${C.violetGlow}`,
+                  }}
+                >
+                  ↺ Retake Quiz
+                </button>
+              )}
+            </motion.div>
+          )}
+
         </div>
       </div>
     </>

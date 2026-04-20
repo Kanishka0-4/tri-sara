@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from "react";
 interface AudioRendererProps {
   block: string;
   variant?: "default" | "chapter";
+  moduleId?: string;
+  subjectId?: string;
 }
 
 function toSpeakableText(markdown: string): string {
@@ -28,18 +30,51 @@ const SPEEDS = [
   { label: "2×",   value: 2.0  },
 ];
 
-export default function AudioRenderer({ block, variant = "default" }: AudioRendererProps) {
+export default function AudioRenderer({ block, variant = "default", moduleId, subjectId }: AudioRendererProps) {
   const [playing,   setPlaying  ] = useState(false);
   const [progress,  setProgress ] = useState(0);
   const [speed,     setSpeed    ] = useState(1.0);
-
-  // KEY FIX: default true so component renders on first pass.
-  // Previously false caused `if (!supported) return null` to fire before
-  // the useEffect ran, permanently hiding the audio player.
   const [supported, setSupported] = useState(true);
 
-  const speedRef    = useRef(1.0);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const speedRef       = useRef(1.0);
+  const intervalRef    = useRef<NodeJS.Timeout | null>(null);
+  const playStartRef   = useRef<number | null>(null);
+  const totalPlayedRef = useRef<number>(0);
+  const moduleIdRef    = useRef(moduleId);
+  const subjectIdRef   = useRef(subjectId);
+
+  // Keep refs in sync with props so saveTime always sees latest values
+  useEffect(() => { moduleIdRef.current  = moduleId;  }, [moduleId]);
+  useEffect(() => { subjectIdRef.current = subjectId; }, [subjectId]);
+
+  const saveTime = () => {
+    if (playStartRef.current) {
+      totalPlayedRef.current += Math.round((Date.now() - playStartRef.current) / 1000);
+      playStartRef.current = null;
+    }
+    const elapsed = totalPlayedRef.current;
+
+    console.log("saveTime called", { elapsed, moduleId: moduleIdRef.current, subjectId: subjectIdRef.current });
+
+    if (elapsed > 0 && moduleIdRef.current && subjectIdRef.current) {
+      console.log("sending fetch...");
+      fetch("/api/moduleBlockTime", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          subjectId: subjectIdRef.current,
+          moduleId:  moduleIdRef.current,
+          blockType: "audio",
+          timeSpentSeconds: elapsed,
+        }),
+        keepalive: true,
+      })
+        .then(r => r.json())
+        .then(d => console.log("saved:", d))
+        .catch(e => console.error("fetch error:", e));
+      totalPlayedRef.current = 0;
+    }
+  };
 
   useEffect(() => {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) {
@@ -48,6 +83,7 @@ export default function AudioRenderer({ block, variant = "default" }: AudioRende
     return () => {
       window.speechSynthesis?.cancel();
       if (intervalRef.current) clearInterval(intervalRef.current);
+      saveTime();
     };
   }, []);
 
@@ -56,6 +92,9 @@ export default function AudioRenderer({ block, variant = "default" }: AudioRende
     setPlaying(false);
     setProgress(0);
     if (intervalRef.current) clearInterval(intervalRef.current);
+    saveTime();
+    totalPlayedRef.current = 0;
+    playStartRef.current = null;
   }, [block]);
 
   const speak = (rate: number) => {
@@ -87,12 +126,18 @@ export default function AudioRenderer({ block, variant = "default" }: AudioRende
         setProgress(100);
         if (intervalRef.current) clearInterval(intervalRef.current);
         setTimeout(() => setProgress(0), 800);
+        saveTime();
       };
       utterance.onerror = () => {
         setPlaying(false);
         setProgress(0);
         if (intervalRef.current) clearInterval(intervalRef.current);
+        saveTime();
       };
+
+      // Set start time RIGHT before speak, not inside onstart
+      // because onstart doesn't fire reliably in all browsers
+      playStartRef.current = Date.now();
       window.speechSynthesis.speak(utterance);
     };
 
@@ -113,6 +158,7 @@ export default function AudioRenderer({ block, variant = "default" }: AudioRende
     if (!playing) return;
     window.speechSynthesis.cancel();
     if (intervalRef.current) clearInterval(intervalRef.current);
+    saveTime();
     speak(val);
   };
 
@@ -123,6 +169,7 @@ export default function AudioRenderer({ block, variant = "default" }: AudioRende
       setPlaying(false);
       setProgress(0);
       if (intervalRef.current) clearInterval(intervalRef.current);
+      saveTime();
       return;
     }
     speak(speedRef.current);
