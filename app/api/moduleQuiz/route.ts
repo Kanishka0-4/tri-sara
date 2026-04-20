@@ -9,7 +9,7 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false },
 });
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY_2 });
 const MODEL_NAME = "llama-3.3-70b-versatile";
 
 function buildModuleQuizPrompt({

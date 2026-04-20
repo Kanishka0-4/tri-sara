@@ -374,7 +374,7 @@ export default function SubjectLandingPage() {
             <ActionButton icon="🗺" label="Roadmap"  onClick={()=>router.push(`/dashboard/subject/${id}/roadmap`)} />
             <ActionButton icon="📊" label="Progress" onClick={()=>router.push(`/dashboard/subject/${id}/progress`)} />
             <ActionButton icon="💬" label="Feedback" onClick={()=>router.push(`/dashboard/subject/${id}/feedback`)} />
-            {megaAlreadyDone&&<ActionButton icon="🏆" label="Mega Quiz Results" onClick={()=>router.push(`/dashboard/subject/${id}/mega`)} />}
+            {megaAlreadyDone&&<ActionButton icon="🏆" label="Mega Quiz Results" onClick={()=>router.push(`/dashboard/subject/${id}/mega/result-analysis`)} />}
           </motion.div>
 
           <AnimatePresence mode="wait">

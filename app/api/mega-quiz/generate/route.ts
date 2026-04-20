@@ -1,7 +1,5 @@
 // Mega Quiz Generation Endpoint
 import { NextRequest, NextResponse } from 'next/server';
-
-
 import { db } from '../../../../lib/db';
 import { generateMegaQuizQuestions } from '../../../../lib/ai';
 
@@ -25,6 +23,7 @@ export async function POST(req: NextRequest) {
   if (!modulesRes.rows.length) {
     return NextResponse.json({ error: 'No topics found for subject' }, { status: 404 });
   }
+
   // Flatten and combine all topics
   let allTopics: string[] = [];
   for (const row of modulesRes.rows) {
@@ -35,19 +34,18 @@ export async function POST(req: NextRequest) {
         const parsed = JSON.parse(row.topics);
         if (Array.isArray(parsed)) allTopics = allTopics.concat(parsed);
       } catch {
-        // fallback: treat as comma-separated string
         allTopics = allTopics.concat(row.topics.split(',').map(t => t.trim()));
       }
     }
   }
+
   // Remove duplicates and empty
   allTopics = [...new Set(allTopics)].filter(Boolean);
   if (!allTopics.length) {
     return NextResponse.json({ error: 'No valid topics found for subject' }, { status: 404 });
   }
 
-  // Generate 25-30 questions using topics
-  const quizQuestions = await generateMegaQuizQuestions(allTopics.join(', '), 28); // 28 as a mid-point
+  const quizQuestions = await generateMegaQuizQuestions(allTopics.join(', '), 25);
 
   return NextResponse.json({
     quiz: quizQuestions,
