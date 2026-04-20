@@ -22,6 +22,7 @@ const C = {
   greenBorder:  "var(--ts-green-border)",
   amber:        "var(--ts-amber)",
   amberSoft:    "var(--ts-amber-soft)",
+  amberBorder:  "var(--ts-amber-border)",
   text:         "var(--ts-text)",
   muted:        "var(--ts-text-muted)",
   dim:          "var(--ts-text-dim)",
